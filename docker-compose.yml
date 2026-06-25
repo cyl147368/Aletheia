@@ -1,0 +1,13 @@
+services:
+  aletheia:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ALETHEIA_ENCRYPTION_KEY=${ALETHEIA_ENCRYPTION_KEY:-}
+      - ALETHEIA_JWT_SECRET=${ALETHEIA_JWT_SECRET:-}
+      - ALETHEIA_ADMIN_PASSWORD=${ALETHEIA_ADMIN_PASSWORD:-}
+      - ALETHEIA_DEFAULT_PROBE_INTERVAL_HOURS=${ALETHEIA_DEFAULT_PROBE_INTERVAL_HOURS:-6}
+    restart: unless-stopped
