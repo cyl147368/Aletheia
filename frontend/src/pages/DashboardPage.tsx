@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { triggerProbe, type Station, type Overview, type ProbeResult, type ModelResult } from '../api';
 
 const statusConfig = {
@@ -167,7 +168,7 @@ export default function DashboardPage() {
         {stations.length === 0 ? (
           <div className="text-center py-16 text-slate-400 bg-white rounded-xl border border-slate-200">
             还没有添加中转站，前往
-            <a href="/manage" className="text-blue-600 mx-1 font-medium">管理页面</a>
+            <Link to="/manage" className="text-blue-600 mx-1 font-medium">管理页面</Link>
             添加
           </div>
         ) : (
