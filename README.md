@@ -1,195 +1,187 @@
-# 🔍 Aletheia
-
 <p align="center">
-  <strong>Aletheia</strong>（ἀλήθεια）—— 古希腊语"去蔽、揭示真相"。
-  一款轻量级的中转站模型可用性探测工具，帮助你持续监控每家中转站：<br/>
-  有哪些模型？哪些真正可以用？首 token 延迟多少？是否套壳或降智？
+  <img src="https://img.shields.io/badge/Aletheia-Truth%20Unveiled-6366f1?style=for-the-badge" alt="Aletheia" />
+  <br>
+  <a href="https://github.com/cyl147368/Aletheia">
+    <img src="https://img.shields.io/github/stars/cyl147368/Aletheia?style=social" />
+  </a>
 </p>
 
+<h3 align="center">揭开中转站的面纱，让每一笔 API 调用都有据可查</h3>
+
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
-  <img src="https://img.shields.io/badge/python-3.12+-green" alt="Python">
-  <img src="https://img.shields.io/badge/fastapi-0.115+-teal" alt="FastAPI">
-  <img src="https://img.shields.io/badge/react-18-f5a623" alt="React">
-  <img src="https://img.shields.io/badge/sqlite-3-lightgrey" alt="SQLite">
+  <img src="https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-MIT-green" />
 </p>
 
 ---
 
-## ✨ 亮点
+## 为什么需要 Aletheia？
 
-- **🔐 数据安全第一**：你的 API Key 永远不会离开你的服务器。所有中转站密钥使用 Fernet 对称加密存储于本地 SQLite，加密密钥由你掌控，无任何遥测或外部上报。
-- **📊 一目了然**：看板一眼看清所有中转站状态（正常 / 部分故障 / 宕机），TTFT 分布图表直观对比模型延迟。
-- **🤖 定时 + 手动**：按站点独立配置探测间隔，也可随时一键手动触发，混合模式灵活又省心。
-- **🪶 极致轻量**：Python + SQLite，单 Docker 镜像。1C1G VPS 流畅运行，零额外依赖，五分钟部署上线。
-- **🔍 低调探测**：探测 prompt 仅发送 `"hi"`，最大程度避免被中转站识别为探测流量。
-- **🔌 OpenAI 兼容**：支持所有兼容 OpenAI API 格式的中转站，即主流站全覆盖。
+市面上的 LLM API 中转站质量参差不齐——宣称支持 Claude Opus，实际返回的是 GPT-4o-mini；标榜「全模型可用」，结果一半模型超时报错；昨天还能用，今天就静默下线。
 
----
+**Aletheia**（希腊语 ἀλήθεια，意为「去蔽」「真相」）是一款自托管的中转站模型可用性探测工具。它会持续对中转站发起探测请求，告诉你：
 
-## 🧭 探测能力
+> **哪些模型真正可用？响应有多快？是不是套壳冒充？**
 
-| 探测项 | 说明 | 状态 |
-|--------|------|------|
-| 模型列表 | 拉取 `/v1/models`，列出所有声称支持的模型 | ✅ |
-| 可用性 | 对每个模型发送请求，验证是否真正可返回结果 | ✅ |
-| TTFT | 记录每个模型的首 token 延迟（Time to First Token） | ✅ |
-| 定时调度 | 按站点独立配置探测间隔 + 开关 | ✅ |
-| 历史趋势 | TTFT 分布图表、可用模型数变化趋势 | ✅ |
-| 套壳检测 | 检测模型是否冒充（宣称 claude 实际是 GPT 等情况） | 📋 |
-| 降智检测 | 检测量化裁切、上下文截断、system prompt 篡改 | 📋 |
-| 性能压测 | 吞吐量 / QPS / 并发上限 | 📋 |
-| 能力矩阵 | function calling / vision / streaming / 长上下文支持 | 📋 |
+## 核心亮点
 
----
+### 🔐 数据安全第一
+- **完全自托管**：所有代码运行在你自己的 VPS 上，不经过第三方服务器
+- **API Key 加密存储**：使用 Fernet 对称加密算法，密钥由你掌控，即使数据库泄露也无法解密
+- **单用户密码保护**：JWT 认证 + bcrypt 哈希，任何设备安全访问
+- **零外部依赖**：不需要注册任何第三方服务，你的中转站 Key 永远不出你的服务器
 
-## 🚀 快速部署
+### ⚡️ 轻量高效
+- **SQLite 单文件数据库**，零运维成本，备份就是一键 `cp`
+- **Docker 一键部署**，1C1G VPS 就能跑
+- **最小化探测策略**：仅发送 `"hi"` 作为探测 payload，不被中转站检测为恶意扫描
+- **智能并发控制**：每站 5 并发，避免触发限流
 
-### Docker（推荐）
+### 📊 持续监控
+- **定时自动探测**：每个中转站独立配置探测间隔，打开开关即可持续监控
+- **手动即时探测**：随时手动触发，结果秒级返回
+- **历史趋势追踪**：TTFT 变化曲线、可用模型数波动，一眼看出质量滑坡
+- **状态自动判定**：绿色 = 全正常，黄色 = 部分故障，红色 = 宕机
+
+### 🧪 探测策略（持续迭代）
+| 阶段 | 能力 | 说明 |
+|------|------|------|
+| ✅ 已完成 | 模型列举 | 拉取 `/v1/models`，确认中转站宣称支持哪些模型 |
+| ✅ 已完成 | 可用性检测 | 对每个模型发送探测请求，验证是否真正可调用 |
+| ✅ 已完成 | TTFT 测量 | 记录首 token 延迟，识别「掺水」模型 |
+| 📋 规划中 | 套壳检测 | 识别中转站用小模型冒充大模型的欺诈行为 |
+| 📋 规划中 | 降智检测 | 检测量化、上下文裁剪、system prompt 篡改 |
+| 📋 规划中 | 能力探测 | 验证 function calling / vision / streaming 等特性 |
+
+## 快速开始
+
+### 前置要求
+- 一台有 Docker 的服务器（Linux / macOS / Windows）
+- 至少 256MB 空闲内存
+- 你手里的中转站 API Key
+
+### 部署（推荐）
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/你的用户名/Aletheia.git
+git clone https://github.com/cyl147368/Aletheia.git
 cd Aletheia
 
-# 2. （可选）配置环境变量，不配置会自动生成
+# 2.（可选）配置环境变量
 cp .env.example .env
+# 编辑 .env 设置密码和密钥，不设置则自动生成
 
 # 3. 启动
 docker compose up -d
 
-# 4. 查看初始密码
-docker compose logs aletheia | grep -A 3 "admin password"
+# 4. 获取管理员密码
+docker compose logs aletheia | grep "admin password"
 
 # 5. 浏览器访问 http://你的服务器IP:8000
+#    用上面的密码登录
 ```
 
-> 💡 建议搭配 Caddy / Nginx 反代并开启 HTTPS，保护数据传输安全。
-
----
-
-## 🛠️ 本地开发
-
-### 后端
+### 本地开发
 
 ```bash
+# 后端
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
-```
 
-### 前端
-
-```bash
+# 前端（新开终端）
 cd frontend
 npm install
 npm run dev
+# 默认 http://localhost:5173，自动代理 /api 到后端
 ```
 
-开发模式下前端自动将 `/api` 代理到 `localhost:8000`。
+### Podman 用户
 
-### 生产构建
+如果使用 Podman 替代 Docker：
+
+```bash
+# 确保 podman socket 已启动
+systemctl start podman.socket
+systemctl enable podman.socket
+
+# 然后用 docker-compose 或 podman-compose
+podman-compose up -d
+# 或
+docker compose up -d
+```
+
+### 生产构建（不依赖 Docker）
 
 ```bash
 cd frontend && npm run build
 cd ../backend && uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
----
+## 使用说明
 
-## 🔒 安全设计
+1. **登录**后进入看板，初始为空
+2. 在**管理页面**添加中转站（名称、Base URL、API Key），支持批量 JSON 导入
+3. 点击**探测**按钮进行首次检测，或开启**定时探测**由系统自动维护
+4. 在**看板**查看所有站点状态概览，在**详情页**查看历史趋势和单模型 TTFT 分布
 
-Aletheia 的每项设计都优先考虑你的数据安全：
+## 技术架构
 
-| 设计 | 说明 |
-|------|------|
-| **本地存储** | 所有数据（中转站信息、API Key、探测结果）仅存储于你自己的服务器上的 SQLite 文件，不经过任何第三方 |
-| **密钥加密** | API Key 使用 Fernet（AES-128-CBC + HMAC）加密后落库，密钥通过环境变量注入，不硬编码 |
-| **单用户认证** | JWT + bcrypt 密码保护，72 小时过期，防止未授权访问 |
-| **零遥测** | 无埋点、无上报、无外部请求（除了你配置的中转站本身），代码可审计 |
-| **密钥脱敏** | 前端仅展示脱敏后的 Key 片段（`sk-***abcd`），完整 Key 不可见 |
+```
+┌─────────────┐     ┌──────────────────┐     ┌──────────┐
+│  React SPA   │────▶│  FastAPI         │────▶│  SQLite  │
+│  (浏览器)    │◀────│  ├─ /api/auth    │     └──────────┘
+└─────────────┘     │  ├─ /api/stations│
+                    │  ├─ /api/probe   │
+                    │  ├─ APScheduler  │
+                    │  └─ KeyCrypto    │
+                    └──────┬───────────┘
+                           │ openai SDK
+                    ┌──────▼───────────┐
+                    │  中转站 APIs      │
+                    └──────────────────┘
+```
 
-### 环境变量
+## 环境变量
 
-| 变量 | 必填 | 说明 |
+| 变量 | 必需 | 说明 |
 |------|------|------|
 | `ALETHEIA_ENCRYPTION_KEY` | 否 | Fernet 加密密钥，留空自动生成 |
 | `ALETHEIA_JWT_SECRET` | 否 | JWT 签名密钥，留空自动生成 |
-| `ALETHEIA_ADMIN_PASSWORD` | 否 | 初始管理员密码，留空自动生成并在日志打印 |
-| `ALETHEIA_DEFAULT_PROBE_INTERVAL_HOURS` | 否 | 默认探测间隔，默认 6 小时 |
+| `ALETHEIA_ADMIN_PASSWORD` | 否 | 管理员初始密码，留空自动生成并打印 |
+| `ALETHEIA_DEFAULT_PROBE_INTERVAL_HOURS` | 否 | 默认探测间隔（小时），默认 6 |
 
----
-
-## 🏗️ 技术栈
-
-| 层 | 技术 |
-|---|------|
-| 后端框架 | FastAPI（Python 3.12+） |
-| ORM | SQLAlchemy 2.0 + aiosqlite |
-| 定时任务 | APScheduler |
-| 加密 | cryptography（Fernet） |
-| 认证 | python-jose（JWT）+ passlib（bcrypt） |
-| API 调用 | openai SDK (OpenAI 兼容) |
-| 前端 | React 18 + TypeScript + Vite |
-| 样式 | Tailwind CSS 4 |
-| 图表 | Recharts |
-| 部署 | Docker + docker-compose |
-
----
-
-## 📁 项目结构
-
-```
-Aletheia/
-├── backend/
-│   ├── main.py              # FastAPI 应用入口
-│   ├── config.py            # Pydantic 配置（环境变量）
-│   ├── database.py          # SQLAlchemy async engine
-│   ├── crypto.py            # Fernet 加解密服务
-│   ├── models/              # ORM 模型定义
-│   ├── routes/              # API 路由
-│   │   ├── auth.py          # 登录 / 改密
-│   │   ├── auth_middleware.py # JWT 鉴权中间件
-│   │   ├── stations.py      # 中转站 CRUD + 批量导入
-│   │   ├── probe.py         # 探测触发 / 历史 / 明细 / 看板
-│   │   └── settings.py      # 全局设置
-│   └── services/
-│       ├── auth.py          # JWT 签发验证 / bcrypt
-│       ├── probe.py         # 核心探测引擎
-│       └── scheduler.py     # APScheduler 定时调度
-├── frontend/
-│   └── src/
-│       ├── api/             # axios 客户端 + API 封装
-│       └── pages/           # 页面组件
-│           ├── LoginPage.tsx
-│           ├── DashboardPage.tsx      # 看板首页
-│           ├── StationDetailPage.tsx  # 站点详情 + 趋势图
-│           ├── ProbeResultPage.tsx    # 探测结果明细
-│           └── ManagePage.tsx         # 站点管理 + 批量导入
-├── Dockerfile
-├── docker-compose.yml
-└── .env.example
-```
-
----
-
-## 🗺️ 路线图
+## 迭代计划
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| Phase 1 | 核心 MVP：站点管理、手动探测（模型列表 + 可用性 + TTFT）、看板、登录 | ✅ |
-| Phase 2 | 定时调度、历史趋势图表 | ✅ |
-| Phase 3 | 套壳检测、降智检测（authenticity_score、degradation_flags） | 📋 |
-| Phase 4 | 性能压测（吞吐 / QPS）、并发上限、能力矩阵、额度查询 | 📋 |
+| Phase 1 | 站点管理 + 手动探测 + 看板 + 登录 | ✅ |
+| Phase 2 | 定时调度 + 历史趋势图表 | ✅ |
+| Phase 3 | 套壳检测 + 降智检测 | 📋 |
+| Phase 4 | 性能探测 / 并发测试 / 能力探测 / 额度查询 | 📋 |
 
----
+## FAQ
 
-## 📄 License
+**Q: 探测会不会被中转站发现/封禁？**
+A: 探测 payload 仅为 `"hi"`，并发控制在 5 个以内，与正常用户行为无异。也可关闭定时探测、仅手动触发。
 
-MIT © 2025
+**Q: 为什么不用 Redis / PostgreSQL？**
+A: 个人或小团队使用 SQLite 完全足够，零运维成本。需要时可自行替换。
+
+**Q: 支持非 OpenAI 兼容 API 的中转站吗？**
+A: 目前仅支持 OpenAI 兼容格式（`/v1/models` 和 `/v1/chat/completions`），这是市面绝大多数中转站的标准。
+
+## License
+
+MIT — see [LICENSE](https://github.com/cyl147368/Aletheia/blob/main/LICENSE)
 
 ---
 
 <p align="center">
-  <sub>名字取自希腊哲学——Aletheia 意为"真相的显现"，也是海德格尔哲学的核心概念之一。</sub>
+  <a href="https://github.com/cyl147368/Aletheia">View on GitHub</a> ·
+  <a href="https://github.com/cyl147368/Aletheia/issues">Report Issue</a>
 </p>
