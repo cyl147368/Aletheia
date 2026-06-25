@@ -59,7 +59,7 @@ export default function ProbeResultPage() {
             </tr>
           </thead>
           <tbody>
-            {result.models.map((m) => (
+            {result.models.map((m: { id: number; model_id: string; available: boolean; ttft_ms: number; response_preview: string | null; error_message: string | null }) => (
               <tr key={m.id} className="border-b hover:bg-slate-50 transition">
                 <td className="px-4 py-3 font-mono text-xs text-slate-700">{m.model_id}</td>
                 <td className="px-4 py-3">

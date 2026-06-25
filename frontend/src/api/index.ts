@@ -1,5 +1,8 @@
 import api from './client';
-import type { Station, Overview, ProbeResult } from './types';
+import type { Station, Overview, ProbeResult, ModelResult } from './types';
+
+// Re-export types for pages
+export type { Station, Overview, ProbeResult, ModelResult };
 
 export async function login(password: string): Promise<string> {
   const { data } = await api.post('/auth/login', { password });

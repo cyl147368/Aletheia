@@ -35,10 +35,13 @@ export default function StationDetailPage() {
   const statusText: Record<string, string> = { ok: '正常', degraded: '部分故障', down: '宕机', unknown: '未探测' };
   const statusColor: Record<string, string> = { ok: 'text-green-600', degraded: 'text-yellow-600', down: 'text-red-600', unknown: 'text-slate-400' };
 
-  const ttftData = result?.models?.filter(m => m.available).map(m => ({
+  const ttftData = result?.models?.filter((m: { available: boolean; model_id: string; ttft_ms: number }) => m.available).map(m => ({
     model: m.model_id.split('/').pop() || m.model_id,
     ttft: m.ttft_ms,
   })) ?? [];
+
+  const latestModels = result?.models ?? [];
+  const hasModels = latestModels.length > 0;
 
   return (
     <div>
@@ -84,7 +87,7 @@ export default function StationDetailPage() {
         </div>
       )}
 
-      {result?.models && result.models.length > 0 && (
+      {hasModels && (
         <>
           {ttftData.length > 1 && (
             <div className="bg-white rounded-xl p-6 shadow mb-6">
@@ -113,7 +116,7 @@ export default function StationDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {result.models.map((m) => (
+                {latestModels.map((m) => (
                   <tr key={m.id} className="border-b hover:bg-slate-50 transition">
                     <td className="px-4 py-3 font-mono text-xs text-slate-700">{m.model_id}</td>
                     <td className="px-4 py-3">
