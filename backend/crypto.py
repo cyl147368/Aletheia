@@ -1,17 +1,18 @@
-import os
 from cryptography.fernet import Fernet
 
 
 class KeyCrypto:
     def __init__(self, key: str = ""):
         if key:
-            self._fernet = Fernet(key.encode() if isinstance(key, str) else key)
+            self._key = key
+            self._fernet = Fernet(key.encode())
         else:
-            self._fernet = Fernet(Fernet.generate_key())
+            self._key = Fernet.generate_key().decode()
+            self._fernet = Fernet(self._key.encode())
 
     @property
     def key(self) -> str:
-        return self._fernet._signing_key.decode() if hasattr(self._fernet, '_signing_key') else ""
+        return self._key
 
     def encrypt(self, plaintext: str) -> str:
         return self._fernet.encrypt(plaintext.encode()).decode()
