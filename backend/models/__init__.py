@@ -49,6 +49,8 @@ class ModelResult(Base):
     ttft_ms = Column(Integer, default=-1)
     response_preview = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
+    request_body = Column(Text, nullable=True)
+    response_body = Column(Text, nullable=True)
     authenticity_score = Column(Float, nullable=True)
     degradation_flags = Column(Text, nullable=True)
 

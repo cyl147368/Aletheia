@@ -64,6 +64,7 @@ async def trigger_probe(
     await db.flush()
 
     for mr in result["model_results"]:
+        import json
         db.add(ModelResult(
             batch_id=batch.id,
             model_id=mr["model_id"],
@@ -71,6 +72,8 @@ async def trigger_probe(
             ttft_ms=mr["ttft_ms"],
             response_preview=mr.get("response_preview"),
             error_message=mr.get("error_message"),
+            request_body=json.dumps(mr.get("request_body")) if mr.get("request_body") else None,
+            response_body=json.dumps(mr.get("response_body")) if mr.get("response_body") else None,
         ))
 
     # 更新站点状态
@@ -172,6 +175,8 @@ async def latest_result(
                 "ttft_ms": m.ttft_ms,
                 "response_preview": m.response_preview,
                 "error_message": m.error_message,
+                "request_body": m.request_body,
+                "response_body": m.response_body,
             }
             for m in models
         ],
@@ -208,6 +213,8 @@ async def batch_detail(
                 "ttft_ms": m.ttft_ms,
                 "response_preview": m.response_preview,
                 "error_message": m.error_message,
+                "request_body": m.request_body,
+                "response_body": m.response_body,
             }
             for m in models
         ],

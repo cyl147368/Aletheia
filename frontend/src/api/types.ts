@@ -27,6 +27,8 @@ export interface ModelResult {
   ttft_ms: number;
   response_preview: string | null;
   error_message: string | null;
+  request_body: string | null;
+  response_body: string | null;
 }
 
 export interface ProbeResult {

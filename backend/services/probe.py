@@ -71,7 +71,18 @@ async def _probe_single_model(client: AsyncOpenAI, model_id: str, settings: Sett
         "ttft_ms": -1,
         "response_preview": None,
         "error_message": None,
+        "request_body": None,
+        "response_body": None,
     }
+
+    # 构造请求体
+    request_body = {
+        "model": model_id,
+        "messages": [{"role": "user", "content": settings.probe_prompt}],
+        "max_tokens": settings.probe_max_tokens,
+        "stream": True,
+    }
+    result["request_body"] = request_body
 
     t_start = time.monotonic()
     try:
@@ -85,8 +96,10 @@ async def _probe_single_model(client: AsyncOpenAI, model_id: str, settings: Sett
 
         first_token = True
         content_chunks = []
+        response_chunks = []
 
         async for chunk in stream:
+            response_chunks.append(chunk.model_dump())
             if first_token:
                 result["ttft_ms"] = int((time.monotonic() - t_start) * 1000)
                 first_token = False
@@ -95,6 +108,7 @@ async def _probe_single_model(client: AsyncOpenAI, model_id: str, settings: Sett
 
         result["available"] = True
         result["response_preview"] = "".join(content_chunks)[:200]
+        result["response_body"] = response_chunks[:10]  # 只保留前10个chunk
 
     except Exception as e:
         result["error_message"] = str(e)[:500]

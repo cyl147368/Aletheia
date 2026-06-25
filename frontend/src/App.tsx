@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -14,14 +14,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function NavBar({ onLogout }: { onLogout: () => void }) {
   return (
-    <nav className="bg-slate-900 text-white px-6 py-3 flex items-center gap-6 shadow">
-      <a href="/" className="text-lg font-bold tracking-wide">Aletheia</a>
-      <div className="flex gap-4 text-sm">
-        <a href="/" className="hover:text-blue-300 transition">看板</a>
-        <a href="/manage" className="hover:text-blue-300 transition">管理</a>
+    <nav className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white px-6 py-4 flex items-center gap-8 shadow-lg border-b border-slate-700">
+      <Link to="/" className="text-xl font-bold tracking-wide bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+        Aletheia
+      </Link>
+      <div className="flex gap-6 text-sm">
+        <Link to="/" className="px-3 py-1.5 rounded-lg hover:bg-slate-700/50 transition font-medium">看板</Link>
+        <Link to="/manage" className="px-3 py-1.5 rounded-lg hover:bg-slate-700/50 transition font-medium">管理</Link>
       </div>
-      <div className="ml-auto">
-        <button onClick={onLogout} className="text-sm text-slate-400 hover:text-white transition">
+      <div className="ml-auto flex items-center gap-4">
+        <span className="text-xs text-slate-400">中转站探测系统</span>
+        <button onClick={onLogout} className="text-sm text-slate-400 hover:text-red-400 transition px-3 py-1.5 rounded-lg hover:bg-slate-700/50">
           退出
         </button>
       </div>
