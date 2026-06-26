@@ -1,7 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getStation, triggerProbe, getLatestResult, type Station, type ProbeResult } from '../api';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { getLatestResult, getStation, triggerProbe, type ProbeResult, type Station } from '../api';
+
+const statusText: Record<string, string> = { ok: '正常', degraded: '部分故障', down: '宕机', unknown: '未探测' };
+const statusClass: Record<string, string> = {
+  ok: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  degraded: 'border-amber-200 bg-amber-50 text-amber-700',
+  down: 'border-rose-200 bg-rose-50 text-rose-700',
+  unknown: 'border-slate-200 bg-slate-50 text-slate-500',
+};
 
 export default function StationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,121 +37,119 @@ export default function StationDetailPage() {
   };
 
   if (!station) {
-    return <div className="text-center py-12 text-slate-400">加载中...</div>;
+    return <div className="py-12 text-center text-sm text-slate-400">加载中...</div>;
   }
 
-  const statusText: Record<string, string> = { ok: '正常', degraded: '部分故障', down: '宕机', unknown: '未探测' };
-  const statusColor: Record<string, string> = { ok: 'text-green-600', degraded: 'text-yellow-600', down: 'text-red-600', unknown: 'text-slate-400' };
-
-  const ttftData = result?.models?.filter((m: { available: boolean; model_id: string; ttft_ms: number }) => m.available).map(m => ({
-    model: m.model_id.split('/').pop() || m.model_id,
-    ttft: m.ttft_ms,
+  const ttftData = result?.models?.filter((model) => model.available).map((model) => ({
+    model: model.model_id.split('/').pop() || model.model_id,
+    ttft: model.ttft_ms,
   })) ?? [];
-
   const latestModels = result?.models ?? [];
-  const hasModels = latestModels.length > 0;
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-6 text-sm text-slate-400">
-        <Link to="/" className="hover:text-blue-600">看板</Link>
+    <div className="space-y-6">
+      <nav className="flex items-center gap-2 text-sm text-slate-400">
+        <Link to="/" className="hover:text-slate-700">看板</Link>
         <span>/</span>
         <span className="text-slate-700">{station.name}</span>
-      </div>
+      </nav>
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{station.name}</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            <span className={statusColor[station.status]}>{statusText[station.status]}</span>
-            <span className="mx-2">·</span>
-            <code className="text-xs">{station.base_url}</code>
-            <span className="mx-2">·</span>
-            定时：{station.schedule_enabled ? `每${station.schedule_interval_hours}h` : '关闭'}
-          </p>
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass[station.status]}`}>
+              {statusText[station.status]}
+            </span>
+            <span className="text-xs text-slate-400">
+              {station.schedule_enabled ? `每 ${station.schedule_interval_hours}h 探测` : '定时关闭'}
+            </span>
+          </div>
+          <h1 className="text-2xl font-semibold text-slate-950">{station.name}</h1>
+          <p className="mt-2 truncate font-mono text-xs text-slate-500">{station.base_url}</p>
         </div>
         <button
           onClick={handleProbe}
           disabled={probing}
-          className="bg-blue-600 text-white rounded-lg px-5 py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+          className="h-10 bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
         >
           {probing ? '探测中...' : '立即探测'}
         </button>
-      </div>
+      </header>
 
       {result?.batch && (
-        <div className="grid grid-cols-4 gap-3 mb-8">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: '模型总数', value: result.batch.total_models },
-            { label: '可用', value: result.batch.available_models, cls: 'text-green-600' },
-            { label: '不可用', value: result.batch.unavailable_models, cls: 'text-red-600' },
+            { label: '可用', value: result.batch.available_models, tone: 'text-emerald-700' },
+            { label: '不可用', value: result.batch.unavailable_models, tone: 'text-rose-700' },
             { label: '耗时', value: `${result.batch.duration_ms}ms` },
-          ].map((c) => (
-            <div key={c.label} className="bg-white rounded-xl p-4 shadow text-center">
-              <div className={`text-2xl font-bold ${c.cls ?? ''}`}>{c.value}</div>
-              <div className="text-xs mt-1 text-slate-500">{c.label}</div>
+          ].map((item) => (
+            <div key={item.label} className="border border-slate-200 bg-white p-4">
+              <div className="text-xs font-medium text-slate-500">{item.label}</div>
+              <div className={`mt-3 text-2xl font-semibold ${item.tone ?? 'text-slate-950'}`}>{item.value}</div>
             </div>
           ))}
-        </div>
+        </section>
       )}
 
-      {hasModels && (
-        <>
-          {ttftData.length > 1 && (
-            <div className="bg-white rounded-xl p-6 shadow mb-6">
-              <h2 className="text-lg font-semibold mb-4 text-slate-800">TTFT 分布 (ms)</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={ttftData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="model" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="ttft" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          <div className="bg-white rounded-xl shadow overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b text-left">
-                  <th className="px-4 py-3 font-medium text-slate-500">模型</th>
-                  <th className="px-4 py-3 font-medium text-slate-500">状态</th>
-                  <th className="px-4 py-3 font-medium text-slate-500">TTFT</th>
-                  <th className="px-4 py-3 font-medium text-slate-500">响应预览</th>
-                  <th className="px-4 py-3 font-medium text-slate-500">错误</th>
-                </tr>
-              </thead>
-              <tbody>
-                {latestModels.map((m) => (
-                  <tr key={m.id} className="border-b hover:bg-slate-50 transition">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{m.model_id}</td>
-                    <td className="px-4 py-3">
-                      {m.available ? (
-                        <span className="text-green-600 text-xs font-medium">✅ 可用</span>
-                      ) : (
-                        <span className="text-red-500 text-xs font-medium">❌ 不可用</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">{m.available ? `${m.ttft_ms}ms` : '—'}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500 max-w-48 truncate" title={m.response_preview ?? ''}>
-                      {m.response_preview || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-red-400 max-w-48 truncate" title={m.error_message ?? ''}>
-                      {m.error_message || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {ttftData.length > 1 && (
+        <section className="border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-950">TTFT 分布</h2>
           </div>
-        </>
+          <div className="h-[320px] p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={ttftData}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                <XAxis dataKey="model" tick={{ fontSize: 11 }} angle={-18} textAnchor="end" height={58} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Line type="monotone" dataKey="ttft" stroke="#0f172a" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
       )}
 
-      {!result?.batch && (
-        <div className="text-center py-12 text-slate-400 bg-white rounded-xl">
-          还没有探测记录，点击上方按钮进行首次探测
+      {latestModels.length > 0 ? (
+        <section className="overflow-x-auto border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-950">模型结果</h2>
+          </div>
+          <table className="w-full min-w-[820px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+              <tr>
+                <th className="px-4 py-3">模型</th>
+                <th className="px-4 py-3">状态</th>
+                <th className="px-4 py-3">TTFT</th>
+                <th className="px-4 py-3">响应预览</th>
+                <th className="px-4 py-3">错误</th>
+              </tr>
+            </thead>
+            <tbody>
+              {latestModels.map((model) => (
+                <tr key={model.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-800">{model.model_id}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex min-w-16 justify-center border px-2 py-1 text-xs font-medium ${model.available ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                      {model.available ? '可用' : '不可用'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{model.available ? `${model.ttft_ms}ms` : '-'}</td>
+                  <td className="max-w-56 px-4 py-3 text-xs text-slate-500">
+                    <div className="truncate" title={model.response_preview ?? ''}>{model.response_preview || '-'}</div>
+                  </td>
+                  <td className="max-w-56 px-4 py-3 text-xs text-rose-500">
+                    <div className="truncate" title={model.error_message ?? ''}>{model.error_message || '-'}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : (
+        <div className="border border-dashed border-slate-300 bg-white px-4 py-14 text-center text-sm text-slate-400">
+          还没有探测记录，点击“立即探测”进行首次探测。
         </div>
       )}
     </div>
