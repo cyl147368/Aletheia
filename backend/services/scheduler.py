@@ -94,6 +94,7 @@ async def _probe_and_save(s: RelayStation, db: AsyncSession):
     await db.flush()
 
     for mr in result["model_results"]:
+        import json
         db.add(ModelResult(
             batch_id=batch.id,
             model_id=mr["model_id"],
@@ -101,6 +102,8 @@ async def _probe_and_save(s: RelayStation, db: AsyncSession):
             ttft_ms=mr["ttft_ms"],
             response_preview=mr.get("response_preview"),
             error_message=mr.get("error_message"),
+            request_body=json.dumps(mr.get("request_body")) if mr.get("request_body") else None,
+            response_body=json.dumps(mr.get("response_body")) if mr.get("response_body") else None,
         ))
 
     if result["available_models"] == 0:

@@ -1,12 +1,27 @@
+from __future__ import annotations
+
 import asyncio
 import time
 import logging
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+from urllib.parse import quote
 
-from openai import AsyncOpenAI
-from config import Settings
+import httpx
+
+if TYPE_CHECKING:
+    from config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ProbeRequest:
+    provider: str
+    endpoint: str
+    url: str
+    headers: dict
+    body: dict
 
 
 async def probe_station(
@@ -17,17 +32,9 @@ async def probe_station(
     """探测一个中转站：返回模型列表 + 每个模型可用性和 TTFT"""
     t0 = time.monotonic()
 
-    client = AsyncOpenAI(
-        base_url=base_url.rstrip("/") + "/v1",
-        api_key=api_key,
-        timeout=settings.probe_timeout_seconds,
-    )
-
     # Step 1: 获取模型列表
     try:
-        models_resp = await client.models.list()
-        model_ids = sorted([m.id for m in models_resp.data])
-        models_json = models_resp.model_dump_json()
+        model_ids, models_json = await _list_models(base_url, api_key, settings)
     except Exception as e:
         logger.warning(f"Failed to list models for {base_url}: {e}")
         return {
@@ -47,7 +54,7 @@ async def probe_station(
 
     async def probe_one(model_id: str) -> dict:
         async with sem:
-            return await _probe_single_model(client, model_id, settings)
+            return await _probe_single_model(base_url, api_key, model_id, settings)
 
     results = await asyncio.gather(*[probe_one(mid) for mid in model_ids])
 
@@ -64,7 +71,22 @@ async def probe_station(
     }
 
 
-async def _probe_single_model(client: AsyncOpenAI, model_id: str, settings: Settings) -> dict:
+async def _list_models(base_url: str, api_key: str, settings: Settings) -> tuple[list[str], str]:
+    url = _join_api_url(base_url, "/v1/models")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Accept": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=settings.probe_timeout_seconds) as client:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        payload = resp.json()
+
+    model_ids = sorted([m["id"] for m in payload.get("data", []) if m.get("id")])
+    return model_ids, resp.text
+
+
+async def _probe_single_model(base_url: str, api_key: str, model_id: str, settings: Settings) -> dict:
     result = {
         "model_id": model_id,
         "available": False,
@@ -75,44 +97,232 @@ async def _probe_single_model(client: AsyncOpenAI, model_id: str, settings: Sett
         "response_body": None,
     }
 
-    # 构造请求体
-    request_body = {
-        "model": model_id,
-        "messages": [{"role": "user", "content": settings.probe_prompt}],
-        "max_tokens": settings.probe_max_tokens,
-        "stream": True,
-    }
-    result["request_body"] = request_body
+    requests = _build_probe_requests(base_url, api_key, model_id, settings)
+    result["request_body"] = [
+        {
+            "provider": request.provider,
+            "endpoint": request.endpoint,
+            "url": request.url,
+            "body": request.body,
+        }
+        for request in requests
+    ]
 
-    t_start = time.monotonic()
-    try:
-        stream = await client.chat.completions.create(
-            model=model_id,
-            messages=[{"role": "user", "content": settings.probe_prompt}],
-            max_tokens=settings.probe_max_tokens,
-            stream=True,
-            stream_options={"include_usage": True},
-        )
+    attempts = []
+    for request in requests:
+        attempts.append(await _send_probe_request(request, settings))
 
-        first_token = True
-        content_chunks = []
-        response_chunks = []
+    successful_attempts = [a for a in attempts if a["available"]]
+    result["available"] = bool(successful_attempts)
+    result["response_body"] = attempts
 
-        async for chunk in stream:
-            response_chunks.append(chunk.model_dump())
-            if first_token:
-                result["ttft_ms"] = int((time.monotonic() - t_start) * 1000)
-                first_token = False
-            if chunk.choices and chunk.choices[0].delta.content:
-                content_chunks.append(chunk.choices[0].delta.content)
+    if successful_attempts:
+        fastest = min(successful_attempts, key=lambda a: a["ttft_ms"])
+        result["ttft_ms"] = fastest["ttft_ms"]
+        result["response_preview"] = fastest["response_preview"]
+    else:
+        result["ttft_ms"] = min((a["ttft_ms"] for a in attempts), default=-1)
 
-        result["available"] = True
-        result["response_preview"] = "".join(content_chunks)[:200]
-        result["response_body"] = response_chunks[:10]  # 只保留前10个chunk
-
-    except Exception as e:
-        result["error_message"] = str(e)[:500]
-        if not result["ttft_ms"] or result["ttft_ms"] == -1:
-            result["ttft_ms"] = int((time.monotonic() - t_start) * 1000)
+    failed_attempts = [a for a in attempts if not a["available"]]
+    if failed_attempts:
+        result["error_message"] = "; ".join(
+            f'{a["endpoint"]}: {a["error_message"]}' for a in failed_attempts
+        )[:500]
 
     return result
+
+
+async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict:
+    attempt = {
+        "provider": request.provider,
+        "endpoint": request.endpoint,
+        "url": request.url,
+        "available": False,
+        "ttft_ms": -1,
+        "response_preview": None,
+        "error_message": None,
+        "response_body": None,
+    }
+    t_start = time.monotonic()
+
+    try:
+        content_chunks = []
+        response_lines = []
+        error_body = None
+
+        async with httpx.AsyncClient(timeout=settings.probe_timeout_seconds) as client:
+            async with client.stream(
+                "POST",
+                request.url,
+                headers=request.headers,
+                json=request.body,
+            ) as resp:
+                if resp.status_code >= 400:
+                    error_body = (await resp.aread()).decode("utf-8", errors="replace")
+                    resp.raise_for_status()
+
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    response_lines.append(line)
+                    content = _extract_stream_content(request.endpoint, line)
+                    if attempt["ttft_ms"] == -1:
+                        attempt["ttft_ms"] = int((time.monotonic() - t_start) * 1000)
+                    if content:
+                        content_chunks.append(content)
+
+        if attempt["ttft_ms"] == -1:
+            attempt["ttft_ms"] = int((time.monotonic() - t_start) * 1000)
+
+        attempt["available"] = True
+        attempt["response_preview"] = "".join(content_chunks)[:200]
+        attempt["response_body"] = response_lines[:20]
+
+    except Exception as e:
+        attempt["error_message"] = str(e)[:500]
+        if error_body:
+            attempt["response_body"] = error_body[:1000]
+        if attempt["ttft_ms"] == -1:
+            attempt["ttft_ms"] = int((time.monotonic() - t_start) * 1000)
+
+    return attempt
+
+
+def _build_probe_requests(base_url: str, api_key: str, model_id: str, settings: Settings) -> list[ProbeRequest]:
+    provider = _detect_provider(model_id)
+
+    if provider == "anthropic":
+        return [
+            ProbeRequest(
+                provider=provider,
+                endpoint="anthropic_messages",
+                url=_join_api_url(base_url, "/v1/messages"),
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Accept": "text/event-stream",
+                },
+                body={
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": settings.probe_prompt}],
+                    "max_tokens": settings.probe_max_tokens,
+                    "stream": True,
+                },
+            )
+        ]
+
+    if provider == "gemini":
+        gemini_model = model_id.removeprefix("models/")
+        return [
+            ProbeRequest(
+                provider=provider,
+                endpoint="gemini_stream_generate_content",
+                url=_join_api_url(
+                    base_url,
+                    f"/v1beta/models/{quote(gemini_model, safe='')}:streamGenerateContent?alt=sse",
+                ),
+                headers={
+                    "x-goog-api-key": api_key,
+                    "Accept": "text/event-stream",
+                },
+                body={
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [{"text": settings.probe_prompt}],
+                        }
+                    ],
+                    "generationConfig": {"maxOutputTokens": settings.probe_max_tokens},
+                },
+            )
+        ]
+
+    openai_headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Accept": "text/event-stream",
+    }
+    return [
+        ProbeRequest(
+            provider=provider,
+            endpoint="openai_responses",
+            url=_join_api_url(base_url, "/v1/responses"),
+            headers=openai_headers,
+            body={
+                "model": model_id,
+                "input": settings.probe_prompt,
+                "max_output_tokens": max(settings.probe_max_tokens, 16),
+                "stream": True,
+                "store": False,
+            },
+        ),
+        ProbeRequest(
+            provider=provider,
+            endpoint="openai_chat_completions",
+            url=_join_api_url(base_url, "/v1/chat/completions"),
+            headers=openai_headers,
+            body={
+                "model": model_id,
+                "messages": [{"role": "user", "content": settings.probe_prompt}],
+                "max_tokens": settings.probe_max_tokens,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            },
+        ),
+    ]
+
+
+def _build_probe_request(base_url: str, api_key: str, model_id: str, settings: Settings) -> ProbeRequest:
+    return _build_probe_requests(base_url, api_key, model_id, settings)[0]
+
+
+def _detect_provider(model_id: str) -> str:
+    model = model_id.lower()
+    if "gemini" in model:
+        return "gemini"
+    if "claude" in model or "anthropic" in model:
+        return "anthropic"
+    return "openai"
+
+
+def _join_api_url(base_url: str, path: str) -> str:
+    root = base_url.rstrip("/")
+    if root.endswith("/v1") and path.startswith("/v1/"):
+        return root + path[len("/v1"):]
+    if root.endswith("/v1beta") and path.startswith("/v1beta/"):
+        return root + path[len("/v1beta"):]
+    if root.endswith("/v1") and path.startswith("/v1beta/"):
+        return root[:-len("/v1")] + path
+    if root.endswith("/v1beta") and path.startswith("/v1/"):
+        return root[:-len("/v1beta")] + path
+    return root + path
+
+
+def _extract_stream_content(endpoint: str, line: str) -> str | None:
+    if line.startswith("data:"):
+        line = line.removeprefix("data:").strip()
+    if not line or line == "[DONE]":
+        return None
+
+    try:
+        payload = httpx.Response(200, content=line).json()
+    except Exception:
+        return None
+
+    if endpoint == "anthropic_messages":
+        if payload.get("type") == "content_block_delta":
+            return payload.get("delta", {}).get("text")
+        return None
+
+    if endpoint == "gemini_stream_generate_content":
+        parts = payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        return "".join(p.get("text", "") for p in parts) or None
+
+    if endpoint == "openai_responses":
+        if payload.get("type") == "response.output_text.delta":
+            return payload.get("delta")
+        return None
+
+    choices = payload.get("choices") or []
+    if choices:
+        return choices[0].get("delta", {}).get("content")
+    return None
