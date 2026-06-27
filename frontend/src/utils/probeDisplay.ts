@@ -61,6 +61,14 @@ export function formatJson(value: unknown): string {
   }
 }
 
+export function formatRequestRecord(request: ProbeRequestRecord | undefined): string {
+  if (!request) return '-';
+  return formatJson({
+    headers: request.headers ?? {},
+    body: request.body,
+  });
+}
+
 export function parseAttempts(value: string | null): ProbeAttempt[] {
   if (!value) return [];
   try {

@@ -13,43 +13,52 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 function NavBar({ onLogout }: { onLogout: () => void }) {
-  const navItem = ({ isActive }: { isActive: boolean }) =>
+  const navLink = ({ isActive }: { isActive: boolean }) =>
     [
       'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition',
       isActive
-        ? 'bg-slate-900 text-white shadow-sm'
-        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+        ? 'bg-[var(--surface-2)] text-[var(--ink)] ring-1 ring-inset ring-[var(--line)]'
+        : 'text-[var(--ink-dim)] hover:bg-[var(--surface-2)]/60 hover:text-[var(--ink)]',
     ].join(' ');
 
+  const NavNumber = ({ active, children }: { active: boolean; children: string }) => (
+    <span className={`font-mono ${active ? 'text-[var(--accent)]' : 'text-[var(--ink-faint)]'}`}>{children}</span>
+  );
+
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white/95 px-4 py-5 shadow-sm backdrop-blur lg:flex lg:flex-col">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[var(--line)] bg-[var(--surface)] px-4 py-5 lg:flex">
       <div className="mb-8 flex items-center gap-3 px-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-900 text-sm font-semibold text-white">
-          A
+        <div className="relative flex h-9 w-9 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--surface-2)]">
+          {/* live signal — observatory mark */}
+          <span className="h-2 w-2 rounded-full bg-[var(--accent)] dot-glow text-[var(--accent)]" />
         </div>
-        <div>
-          <div className="text-base font-semibold tracking-tight text-slate-950">Aletheia</div>
-          <div className="text-xs text-slate-500">Relay Observatory</div>
+        <div className="leading-tight">
+          <div className="font-mono text-sm font-semibold tracking-tight text-[var(--ink)]">Aletheia</div>
+          <div className="text-[11px] text-[var(--ink-faint)]">Relay Observatory</div>
         </div>
       </div>
 
-      <div className="space-y-1">
-        <NavLink to="/" className={navItem} end>
-          <span className="text-base">⌁</span>
-          看板
-        </NavLink>
-        <NavLink to="/manage" className={navItem}>
-          <span className="text-base">＋</span>
-          站点管理
-        </NavLink>
+      <div className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--ink-faint)]">
+        监控
       </div>
+      <nav className="space-y-1">
+        <NavLink to="/" className={navLink} end>
+          {({ isActive }) => (<><NavNumber active={isActive}>01</NavNumber>看板</>)}
+        </NavLink>
+        <NavLink to="/manage" className={navLink}>
+          {({ isActive }) => (<><NavNumber active={isActive}>02</NavNumber>站点管理</>)}
+        </NavLink>
+      </nav>
 
-      <div className="mt-auto rounded-md border border-slate-200 bg-slate-50 p-3">
-        <div className="text-xs font-medium text-slate-500">当前会话</div>
-        <div className="mt-1 text-sm font-semibold text-slate-900">已认证</div>
+      <div className="mt-auto rounded-md border border-[var(--line)] bg-[var(--surface-2)]/40 p-3">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)] dot-glow text-[var(--ok)]" />
+          <div className="text-xs font-medium text-[var(--ink-dim)]">会话活跃</div>
+        </div>
+        <div className="mt-1 font-mono text-[11px] text-[var(--ink-faint)]">已认证</div>
         <button
           onClick={onLogout}
-          className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          className="mt-3 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--ink-dim)] transition hover:border-[var(--bad)]/40 hover:bg-[var(--bad)]/5 hover:text-[var(--bad)]"
         >
           退出登录
         </button>
@@ -89,11 +98,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <NavBar onLogout={handleLogout} />
-      <div className="min-h-screen bg-slate-50 lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/85 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="min-h-screen lg:pl-64">
+        <header className="sticky top-0 z-10 border-b border-[var(--line)] bg-[var(--bg)]/85 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between">
-            <div className="font-semibold text-slate-950">Aletheia</div>
-            <button onClick={handleLogout} className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-600">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[var(--accent)] dot-glow text-[var(--accent)]" />
+              <span className="font-mono text-sm font-semibold text-[var(--ink)]">Aletheia</span>
+            </div>
+            <button onClick={handleLogout} className="rounded-md border border-[var(--line)] px-3 py-1.5 text-sm text-[var(--ink-dim)]">
               退出
             </button>
           </div>

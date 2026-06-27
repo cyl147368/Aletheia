@@ -2,6 +2,8 @@ export interface Station {
   id: number;
   name: string;
   base_url: string;
+  official_url: string | null;
+  api_key: string;
   api_key_masked: string;
   schedule_enabled: boolean;
   schedule_interval_hours: number;
@@ -49,6 +51,7 @@ export interface ProbeRequestRecord {
   provider: string;
   endpoint: string;
   url: string;
+  headers?: Record<string, string> | null;
   body: unknown;
 }
 

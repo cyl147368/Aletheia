@@ -27,6 +27,7 @@ export async function getStation(id: number): Promise<Station> {
 export async function createStation(body: {
   name: string;
   base_url: string;
+  official_url?: string | null;
   api_key: string;
   schedule_enabled?: boolean;
   schedule_interval_hours?: number;
@@ -47,6 +48,7 @@ export async function deleteStation(id: number): Promise<void> {
 export async function importStations(items: {
   name: string;
   base_url: string;
+  official_url?: string | null;
   api_key: string;
   schedule_enabled?: boolean;
   schedule_interval_hours?: number;

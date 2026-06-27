@@ -20,10 +20,18 @@ class StationImportItemTest(unittest.TestCase):
 
         self.assertIn("schedule_enabled", fields)
         self.assertIn("schedule_interval_hours", fields)
+        self.assertIn("official_url", fields)
         self.assertIsInstance(fields["schedule_enabled"].value, ast.Constant)
         self.assertIs(fields["schedule_enabled"].value.value, True)
         self.assertIsInstance(fields["schedule_interval_hours"].value, ast.Constant)
         self.assertEqual(fields["schedule_interval_hours"].value.value, 6)
+
+    def test_station_output_includes_plain_key_and_official_url(self):
+        source = pathlib.Path("routes/stations.py").read_text()
+
+        self.assertIn('"api_key": api_key', source)
+        self.assertIn('"official_url": s.official_url', source)
+        self.assertIn("api_key_encrypted=body.api_key.strip()", source)
 
 
 if __name__ == "__main__":

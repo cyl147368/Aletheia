@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import RelayStation, ProbeBatch, ModelResult
 from services.probe import probe_station
-from crypto import get_crypto
 from config import Settings
 
 logger = logging.getLogger(__name__)
@@ -63,9 +62,7 @@ async def _run_scheduled_probes():
 
 async def _probe_and_save(s: RelayStation, db: AsyncSession):
     logger.info(f"Scheduled probe: {s.name}")
-    api_key = get_crypto().decrypt(s.api_key_encrypted)
-
-    result = await probe_station(s.base_url, api_key, _settings)
+    result = await probe_station(s.base_url, s.api_key_encrypted, _settings)
 
     now = datetime.now(timezone.utc).isoformat()
 

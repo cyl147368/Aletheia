@@ -10,7 +10,6 @@ from database import get_db
 from models import RelayStation, ProbeBatch, ModelResult
 from routes.auth_middleware import require_auth
 from services.probe import probe_station
-from crypto import get_crypto
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["probe"], dependencies=[Depends(require_auth)])
@@ -26,8 +25,7 @@ async def trigger_probe(
     if not s:
         raise HTTPException(status_code=404, detail="Station not found")
 
-    api_key = get_crypto().decrypt(s.api_key_encrypted)
-    result = await probe_station(s.base_url, api_key, settings)
+    result = await probe_station(s.base_url, s.api_key_encrypted, settings)
 
     if "error" in result:
         # 连 /v1/models 都失败了

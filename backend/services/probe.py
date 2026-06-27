@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+ANTHROPIC_1M_CONTEXT_BETA = "context-1m-2025-08-07"
+
 
 @dataclass(frozen=True)
 class ProbeRequest:
@@ -380,30 +382,40 @@ async def _send_probe_request_with_retry(request: ProbeRequest, settings: Settin
     if attempt["available"] or not _needs_1m_context_retry(attempt):
         return attempt
 
-    retry_request = _with_1m_context_model(request)
-    if retry_request.body == request.body:
-        return attempt
+    attempts = [attempt]
+    for retry_request in _build_1m_context_retry_requests(request):
+        retry_attempt = await _send_probe_request(retry_request, settings)
+        retry_attempt["retry_of"] = request.body.get("model")
+        retry_attempt["retry_reason"] = "1m_context_required"
+        attempts.append(retry_attempt)
+        if retry_attempt["available"]:
+            return retry_attempt
+        if not _needs_1m_context_retry(retry_attempt):
+            break
 
-    retry_attempt = await _send_probe_request(retry_request, settings)
-    retry_attempt["retry_of"] = request.body.get("model")
-    retry_attempt["retry_reason"] = "1m_context_required"
-    if retry_attempt["available"]:
-        return retry_attempt
-
-    return _merge_1m_retry_failure(attempt, retry_attempt)
+    return _merge_1m_retry_failure(attempts)
 
 
-def _merge_1m_retry_failure(original_attempt: dict, retry_attempt: dict) -> dict:
-    retry_attempt["error_message"] = (
-        f'original: {original_attempt.get("error_message")}; '
-        f'1m retry: {retry_attempt.get("error_message")}'
+def _merge_1m_retry_failure(attempts: list[dict]) -> dict:
+    final_attempt = attempts[-1]
+    final_attempt["error_message"] = "; ".join(
+        f'{_retry_label(index)}: {attempt.get("error_message")}'
+        for index, attempt in enumerate(attempts)
     )[:500]
-    retry_attempt["response_body"] = {
-        "original_response_body": original_attempt.get("response_body"),
-        "retry_response_body": retry_attempt.get("response_body"),
+    final_attempt["response_body"] = {
+        _retry_response_key(index): attempt.get("response_body")
+        for index, attempt in enumerate(attempts)
     }
-    retry_attempt["retry_reason"] = retry_attempt.get("retry_reason") or "1m_context_required"
-    return retry_attempt
+    final_attempt["retry_reason"] = final_attempt.get("retry_reason") or "1m_context_required"
+    return final_attempt
+
+
+def _retry_label(index: int) -> str:
+    return "original" if index == 0 else f"1m retry {index}"
+
+
+def _retry_response_key(index: int) -> str:
+    return "original_response_body" if index == 0 else f"retry_{index}_response_body"
 
 
 def _probe_request_to_record(request: ProbeRequest) -> dict:
@@ -411,6 +423,7 @@ def _probe_request_to_record(request: ProbeRequest) -> dict:
         "provider": request.provider,
         "endpoint": request.endpoint,
         "url": request.url,
+        "headers": _safe_request_headers(request.headers),
         "body": request.body,
         "diagnostic_id": request.diagnostic_id,
     }
@@ -421,9 +434,21 @@ def _probe_attempt_to_request_record(attempt: dict) -> dict:
         "provider": attempt.get("provider"),
         "endpoint": attempt.get("endpoint"),
         "url": attempt.get("url"),
+        "headers": attempt.get("request_headers"),
         "body": attempt.get("request_body"),
         "diagnostic_id": attempt.get("diagnostic_id"),
     }
+
+
+def _safe_request_headers(headers: dict) -> dict:
+    safe = {}
+    for key, value in headers.items():
+        normalized = key.lower()
+        if normalized in {"authorization", "x-api-key", "x-goog-api-key"}:
+            safe[key] = "***"
+        else:
+            safe[key] = value
+    return safe
 
 
 async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict:
@@ -438,6 +463,7 @@ async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict
         "response_body": None,
         "diagnostic_id": request.diagnostic_id,
         "request_body": request.body,
+        "request_headers": _safe_request_headers(request.headers),
     }
     t_start = time.monotonic()
 
@@ -699,6 +725,32 @@ def _with_1m_context_model(request: ProbeRequest) -> ProbeRequest:
         body=body,
         diagnostic_id=request.diagnostic_id,
     )
+
+
+def _with_1m_context_header(request: ProbeRequest) -> ProbeRequest:
+    headers = dict(request.headers)
+    existing = str(headers.get("anthropic-beta", "")).strip()
+    betas = [beta.strip() for beta in existing.split(",") if beta.strip()]
+    if ANTHROPIC_1M_CONTEXT_BETA not in betas:
+        betas.append(ANTHROPIC_1M_CONTEXT_BETA)
+    headers["anthropic-beta"] = ",".join(betas)
+    return ProbeRequest(
+        provider=request.provider,
+        endpoint=request.endpoint,
+        url=request.url,
+        headers=headers,
+        body=request.body,
+        diagnostic_id=request.diagnostic_id,
+    )
+
+
+def _build_1m_context_retry_requests(request: ProbeRequest) -> list[ProbeRequest]:
+    with_header = _with_1m_context_header(request)
+    requests = [with_header]
+    with_header_and_model = _with_1m_context_model(with_header)
+    if with_header_and_model.body != with_header.body:
+        requests.append(with_header_and_model)
+    return requests
 
 
 def _detect_provider(model_id: str) -> str:

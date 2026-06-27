@@ -1,4 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from models import Base
 
 engine = None
@@ -12,6 +14,11 @@ async def init_db(database_url: str):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            await conn.execute(text("ALTER TABLE relay_stations ADD COLUMN official_url TEXT"))
+        except OperationalError as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
 
 
 async def get_db():

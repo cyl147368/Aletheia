@@ -19,15 +19,18 @@ if "httpx" not in sys.modules:
     sys.modules["httpx"] = httpx_stub
 
 from services.probe import (
+    ANTHROPIC_1M_CONTEXT_BETA,
     DIAGNOSTIC_CASES,
     _analyze_diagnostic_attempts,
     _analyze_degradation,
     _analyze_model_claims,
+    _build_1m_context_retry_requests,
     _build_diagnostic_requests,
     _build_probe_request,
     _build_probe_requests,
     _merge_1m_retry_failure,
     _probe_attempt_to_request_record,
+    _probe_request_to_record,
     _with_1m_context_model,
     _summarize_batch_diagnostics,
 )
@@ -129,12 +132,46 @@ class ProbeRequestTest(unittest.TestCase):
         self.assertEqual(retried.endpoint, requests[0].endpoint)
         self.assertEqual(retried.url, requests[0].url)
 
+    def test_builds_1m_retry_requests_with_header_before_model_alias(self):
+        requests = _build_probe_requests(
+            "https://relay.example.com/v1",
+            "sk-test",
+            "claude-3-7-sonnet-20250219",
+            probe_settings(),
+        )
+
+        retries = _build_1m_context_retry_requests(requests[0])
+
+        self.assertEqual(len(retries), 2)
+        self.assertEqual(retries[0].body["model"], "claude-3-7-sonnet-20250219")
+        self.assertEqual(retries[0].headers["anthropic-beta"], ANTHROPIC_1M_CONTEXT_BETA)
+        self.assertEqual(retries[1].body["model"], "claude-3-7-sonnet-20250219[1m]")
+        self.assertEqual(retries[1].headers["anthropic-beta"], ANTHROPIC_1M_CONTEXT_BETA)
+
+    def test_request_record_keeps_safe_headers_visible(self):
+        request = _build_probe_request(
+            "https://relay.example.com/v1",
+            "sk-test",
+            "claude-3-7-sonnet-20250219",
+            probe_settings(),
+        )
+        retried = _build_1m_context_retry_requests(request)[0]
+
+        record = _probe_request_to_record(retried)
+
+        self.assertEqual(record["headers"]["x-api-key"], "***")
+        self.assertEqual(record["headers"]["anthropic-beta"], ANTHROPIC_1M_CONTEXT_BETA)
+
     def test_attempt_request_record_prefers_actual_retry_body(self):
         record = _probe_attempt_to_request_record(
             {
                 "provider": "anthropic",
                 "endpoint": "anthropic_messages",
                 "url": "https://relay.example.com/v1/messages",
+                "request_headers": {
+                    "x-api-key": "***",
+                    "anthropic-beta": ANTHROPIC_1M_CONTEXT_BETA,
+                },
                 "request_body": {
                     "model": "claude-3-7-sonnet-20250219[1m]",
                     "messages": [{"role": "user", "content": "hi"}],
@@ -143,6 +180,7 @@ class ProbeRequestTest(unittest.TestCase):
         )
 
         self.assertEqual(record["body"]["model"], "claude-3-7-sonnet-20250219[1m]")
+        self.assertEqual(record["headers"]["anthropic-beta"], ANTHROPIC_1M_CONTEXT_BETA)
 
     def test_failed_1m_retry_keeps_retry_request_body_visible(self):
         original = {
@@ -153,20 +191,32 @@ class ProbeRequestTest(unittest.TestCase):
             "error_message": "1m 上下文已经全量可用，请启用 1m 上下文后重试",
             "request_body": {"model": "claude-3-7-sonnet-20250219"},
         }
-        retry = {
+        retry_with_header = {
+            "provider": "anthropic",
+            "endpoint": "anthropic_messages",
+            "url": "https://relay.example.com/v1/messages",
+            "available": False,
+            "error_message": "1m 上下文已经全量可用，请启用 1m 上下文后重试",
+            "request_headers": {"anthropic-beta": ANTHROPIC_1M_CONTEXT_BETA},
+            "request_body": {"model": "claude-3-7-sonnet-20250219"},
+        }
+        retry_with_alias = {
             "provider": "anthropic",
             "endpoint": "anthropic_messages",
             "url": "https://relay.example.com/v1/messages",
             "available": False,
             "error_message": "still unavailable",
+            "request_headers": {"anthropic-beta": ANTHROPIC_1M_CONTEXT_BETA},
             "request_body": {"model": "claude-3-7-sonnet-20250219[1m]"},
         }
 
-        merged = _merge_1m_retry_failure(original, retry)
+        merged = _merge_1m_retry_failure([original, retry_with_header, retry_with_alias])
 
         self.assertEqual(merged["request_body"]["model"], "claude-3-7-sonnet-20250219[1m]")
+        self.assertEqual(merged["request_headers"]["anthropic-beta"], ANTHROPIC_1M_CONTEXT_BETA)
         self.assertIn("original:", merged["error_message"])
-        self.assertIn("1m retry:", merged["error_message"])
+        self.assertIn("1m retry 1:", merged["error_message"])
+        self.assertIn("1m retry 2:", merged["error_message"])
 
     def test_diagnostic_analysis_scores_cross_provider_failures(self):
         attempts = [

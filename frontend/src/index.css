@@ -1,27 +1,108 @@
 @import "tailwindcss";
 
+/* ── Aletheia · Relay Observatory ───────────────────────────
+   Dark monitoring-console aesthetic. Tokens kept here so the
+   page reads as a single coherent system, not a Tailwind salad.
+   ─────────────────────────────────────────────────────────── */
+
+:root {
+  --bg: #07090f;          /* near-black, slightly blue */
+  --surface: #0d1117;     /* panels / cards */
+  --surface-2: #11161f;   /* raised surface (hover, expanded) */
+  --line: #1c2230;        /* hairline borders */
+  --line-soft: #151a24;   /* very subtle dividers */
+  --ink: #e6e9ef;         /* primary text */
+  --ink-dim: #8b95a5;     /* secondary text */
+  --ink-faint: #5a6473;   /* labels, captions */
+  --accent: #5eead4;      /* teal — TTFT / neutral data accent */
+  --accent-2: #818cf8;    /* indigo — secondary accent */
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #fb7185;
+  --info: #38bdf8;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ambient observatory backdrop: faint coordinate grid + a soft
+   top glow. Purely decorative, pointer-events:none, very low
+   opacity so data stays the focus. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(94, 234, 212, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(94, 234, 212, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 100%);
 }
 
 #root {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
 }
 
-button,
-input,
-textarea {
+button, input, textarea, select {
   font: inherit;
+  color: inherit;
 }
 
-button {
-  cursor: pointer;
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* Monospace utility — used for model ids, URLs, keys, latency,
+   anything that is "data" rather than "prose". Slightly tightened
+   letter-spacing for a console readout feel. */
+.font-mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: -0.01em;
 }
 
-button:disabled {
-  cursor: not-allowed;
+/* Status dots with a soft glow — the signature micro-element.
+   .dot-glow adds the halo; pair with a bg-* color class. */
+.dot-glow {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.02), 0 0 10px 0 currentColor;
+  opacity: 0.95;
+}
+
+/* Hairline panel — the workhorse surface. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+/* Scrollbars: thin, dark, unobtrusive. */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Focus ring tuned for dark surface. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

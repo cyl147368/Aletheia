@@ -12,6 +12,7 @@ class RelayStation(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(Text, nullable=False)
     base_url = Column(Text, nullable=False)
+    official_url = Column(Text, nullable=True)
     api_key_encrypted = Column(Text, nullable=False)
     schedule_enabled = Column(Integer, default=1)
     schedule_interval_hours = Column(Integer, default=6)
