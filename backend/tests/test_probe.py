@@ -1,7 +1,33 @@
 import unittest
+import sys
+import types
 from types import SimpleNamespace
 
-from services.probe import _build_probe_request, _build_probe_requests
+if "httpx" not in sys.modules:
+    httpx_stub = types.ModuleType("httpx")
+
+    class _StubResponse:
+        def __init__(self, status_code, content):
+            self.status_code = status_code
+            self.content = content
+
+        def json(self):
+            import json
+            return json.loads(self.content)
+
+    httpx_stub.Response = _StubResponse
+    sys.modules["httpx"] = httpx_stub
+
+from services.probe import (
+    DIAGNOSTIC_CASES,
+    _analyze_diagnostic_attempts,
+    _analyze_degradation,
+    _analyze_model_claims,
+    _build_diagnostic_requests,
+    _build_probe_request,
+    _build_probe_requests,
+    _summarize_batch_diagnostics,
+)
 
 
 def probe_settings():
@@ -57,6 +83,158 @@ class ProbeRequestTest(unittest.TestCase):
         )
         self.assertEqual(req.headers["x-goog-api-key"], "sk-test")
         self.assertEqual(req.body["contents"][0]["parts"][0]["text"], "hi")
+
+    def test_builds_provider_specific_diagnostic_requests(self):
+        openai = _build_diagnostic_requests(
+            "https://relay.example.com",
+            "sk-test",
+            "gpt-4o-mini",
+            probe_settings(),
+        )
+        claude = _build_diagnostic_requests(
+            "https://relay.example.com/v1",
+            "sk-test",
+            "claude-3-5-sonnet-20241022",
+            probe_settings(),
+        )
+        gemini = _build_diagnostic_requests(
+            "https://relay.example.com/v1",
+            "sk-test",
+            "gemini-1.5-pro",
+            probe_settings(),
+        )
+
+        self.assertEqual(len(openai), len(DIAGNOSTIC_CASES) * 2)
+        self.assertEqual(openai[0].endpoint, "openai_responses_diagnostic")
+        self.assertIn("Return only", openai[0].body["input"])
+        self.assertEqual(claude[0].endpoint, "anthropic_messages_diagnostic")
+        self.assertIn("Return only", claude[0].body["messages"][0]["content"])
+        self.assertEqual(gemini[0].endpoint, "gemini_stream_generate_content_diagnostic")
+        self.assertIn("Return only", gemini[0].body["contents"][0]["parts"][0]["text"])
+
+    def test_diagnostic_analysis_scores_cross_provider_failures(self):
+        attempts = [
+            {
+                "endpoint": "anthropic_messages_diagnostic",
+                "diagnostic_id": "arithmetic",
+                "available": True,
+                "ttft_ms": 90,
+                "response_preview": "43",
+                "error_message": None,
+            },
+            {
+                "endpoint": "gemini_stream_generate_content_diagnostic",
+                "diagnostic_id": "instruction_lock",
+                "available": True,
+                "ttft_ms": 100,
+                "response_preview": "hello sentinel-9341",
+                "error_message": None,
+            },
+            {
+                "endpoint": "openai_chat_completions_diagnostic",
+                "diagnostic_id": "refusal_check",
+                "available": True,
+                "ttft_ms": 100,
+                "response_preview": "As an AI model, I cannot answer.",
+                "error_message": None,
+            },
+        ]
+
+        analysis = _analyze_diagnostic_attempts(attempts)
+
+        self.assertEqual(analysis["authenticity_score"], 0.4)
+        self.assertEqual(
+            analysis["degradation_flags"],
+            ["reasoning_probe_failed", "instruction_following_failed", "spurious_refusal"],
+        )
+
+    def test_degradation_analysis_flags_empty_successful_response(self):
+        analysis = _analyze_degradation(
+            [
+                {
+                    "endpoint": "openai_responses",
+                    "available": True,
+                    "ttft_ms": 120,
+                    "response_preview": "",
+                    "error_message": None,
+                }
+            ]
+        )
+
+        self.assertEqual(analysis["authenticity_score"], 0.65)
+        self.assertEqual(analysis["degradation_flags"], ["empty_success_response"])
+
+    def test_degradation_analysis_flags_openai_fallback(self):
+        analysis = _analyze_degradation(
+            [
+                {
+                    "endpoint": "openai_responses",
+                    "available": False,
+                    "ttft_ms": 80,
+                    "response_preview": None,
+                    "error_message": "404 Not Found",
+                },
+                {
+                    "endpoint": "openai_chat_completions",
+                    "available": True,
+                    "ttft_ms": 140,
+                    "response_preview": "hi",
+                    "error_message": None,
+                },
+            ]
+        )
+
+        self.assertEqual(analysis["authenticity_score"], 0.8)
+        self.assertEqual(analysis["degradation_flags"], ["openai_responses_fallback"])
+
+    def test_model_claim_analysis_flags_suspicious_alias(self):
+        analysis = _analyze_model_claims(
+            "claude-3-opus",
+            [
+                {
+                    "endpoint": "openai_chat_completions",
+                    "available": True,
+                    "ttft_ms": 120,
+                    "response_preview": "model: gpt-4o-mini",
+                    "error_message": None,
+                }
+            ],
+        )
+
+        self.assertEqual(analysis["authenticity_score"], 0.55)
+        self.assertEqual(analysis["degradation_flags"], ["wrapper_suspected"])
+
+    def test_batch_diagnostics_reports_performance_and_capability_summary(self):
+        diagnostics = _summarize_batch_diagnostics(
+            [
+                {
+                    "model_id": "gpt-4o-mini",
+                    "available": True,
+                    "ttft_ms": 120,
+                    "degradation_flags": [],
+                },
+                {
+                    "model_id": "claude-3-opus",
+                    "available": True,
+                    "ttft_ms": 12000,
+                    "degradation_flags": ["wrapper_suspected"],
+                },
+                {
+                    "model_id": "gpt-4o-mini-vision",
+                    "available": False,
+                    "ttft_ms": 500,
+                    "degradation_flags": ["quota_or_credit_error"],
+                    "capability_flags": ["vision_declared"],
+                },
+            ],
+            duration_ms=15000,
+        )
+
+        self.assertEqual(diagnostics["available_ratio"], 0.67)
+        self.assertEqual(diagnostics["avg_ttft_ms"], 6060)
+        self.assertEqual(diagnostics["capability_summary"]["vision_declared"], 1)
+        self.assertEqual(diagnostics["risk_summary"]["wrapper_suspected"], 1)
+        self.assertEqual(diagnostics["risk_summary"]["quota_or_credit_error"], 1)
 
 
 if __name__ == "__main__":

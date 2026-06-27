@@ -1,8 +1,8 @@
 import api from './client';
-import type { Station, Overview, ProbeResult, ModelResult } from './types';
+import type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult } from './types';
 
 // Re-export types for pages
-export type { Station, Overview, ProbeResult, ModelResult };
+export type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult };
 
 export async function login(password: string): Promise<string> {
   const { data } = await api.post('/auth/login', { password });
@@ -28,6 +28,8 @@ export async function createStation(body: {
   name: string;
   base_url: string;
   api_key: string;
+  schedule_enabled?: boolean;
+  schedule_interval_hours?: number;
 }): Promise<Station> {
   const { data } = await api.post('/stations', body);
   return data;
@@ -42,7 +44,13 @@ export async function deleteStation(id: number): Promise<void> {
   await api.delete(`/stations/${id}`);
 }
 
-export async function importStations(items: { name: string; base_url: string; api_key: string }[]): Promise<number> {
+export async function importStations(items: {
+  name: string;
+  base_url: string;
+  api_key: string;
+  schedule_enabled?: boolean;
+  schedule_interval_hours?: number;
+}[]): Promise<number> {
   const { data } = await api.post('/stations/import', items);
   return data.imported;
 }

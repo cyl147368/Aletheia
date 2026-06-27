@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { triggerProbe, type ModelResult, type Overview, type ProbeResult, type Station } from '../api';
+import {
+  attemptRole,
+  capabilityFlagLabel,
+  degradationFlagLabel,
+  endpointLabel,
+  formatJson,
+  parseAttempts,
+  parseCapabilityFlags,
+  parseFlags,
+  parseRequests,
+} from '../utils/probeDisplay';
 
 const statusConfig = {
   ok: { label: '正常', dot: 'bg-emerald-500', pill: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
@@ -8,15 +19,6 @@ const statusConfig = {
   down: { label: '宕机', dot: 'bg-rose-500', pill: 'border-rose-200 bg-rose-50 text-rose-700' },
   unknown: { label: '未探测', dot: 'bg-slate-400', pill: 'border-slate-200 bg-slate-50 text-slate-500' },
 };
-
-function formatJson(value?: string | null) {
-  if (!value) return '-';
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
-}
 
 function AvailabilityPill({ available }: { available: boolean }) {
   return available ? (
@@ -33,6 +35,10 @@ function AvailabilityPill({ available }: { available: boolean }) {
 function ModelRow({ model }: { model: ModelResult }) {
   const [expanded, setExpanded] = useState(false);
   const hasDetail = Boolean(model.request_body || model.response_body);
+  const attempts = parseAttempts(model.response_body);
+  const requests = parseRequests(model.request_body);
+  const flags = parseFlags(model.degradation_flags);
+  const capabilities = parseCapabilityFlags(model.degradation_flags);
 
   return (
     <>
@@ -48,6 +54,24 @@ function ModelRow({ model }: { model: ModelResult }) {
         <td className="max-w-64 px-4 py-3 text-xs text-rose-500">
           <div className="truncate" title={model.error_message || ''}>{model.error_message || '-'}</div>
         </td>
+        <td className="px-4 py-3">
+          {flags.length > 0 || capabilities.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {flags.map((flag) => (
+                <span key={flag} className="inline-flex border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  {degradationFlagLabel[flag] ?? flag}
+                </span>
+              ))}
+              {capabilities.map((flag) => (
+                <span key={flag} className="inline-flex border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                  {capabilityFlagLabel[flag] ?? flag}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-xs text-slate-400">-</span>
+          )}
+        </td>
         <td className="px-4 py-3 text-right">
           {hasDetail && (
             <button
@@ -61,20 +85,70 @@ function ModelRow({ model }: { model: ModelResult }) {
       </tr>
       {expanded && hasDetail && (
         <tr className="border-t border-slate-100 bg-slate-50">
-          <td colSpan={6} className="px-4 py-4">
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div>
-                <div className="mb-2 text-xs font-semibold text-slate-600">请求体</div>
-                <pre className="max-h-48 overflow-auto border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700">
-                  {formatJson(model.request_body)}
-                </pre>
-              </div>
-              <div>
-                <div className="mb-2 text-xs font-semibold text-slate-600">响应体</div>
-                <pre className="max-h-48 overflow-auto border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700">
-                  {formatJson(model.response_body)}
-                </pre>
-              </div>
+          <td colSpan={7} className="px-4 py-4">
+            <div className="space-y-3">
+              {attempts.length > 0 ? attempts.map((attempt, index) => {
+                const req = requests[index];
+                return (
+                  <div key={`${attempt.endpoint}-${index}`} className="border border-slate-200 bg-white">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-700">
+                          {endpointLabel[attempt.endpoint] ?? attempt.endpoint}
+                        </span>
+                        <span className="inline-flex border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                          {attemptRole(index, attempts)}
+                        </span>
+                        <span
+                          className={`inline-flex border px-1.5 py-0.5 text-[10px] font-medium ${
+                            attempt.available
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-rose-200 bg-rose-50 text-rose-700'
+                          }`}
+                        >
+                          {attempt.available ? `TTFT ${attempt.ttft_ms}ms` : '失败'}
+                        </span>
+                      </div>
+                      <code className="font-mono text-[11px] text-slate-400">{attempt.url}</code>
+                    </div>
+                    {attempt.error_message && (
+                      <p className="border-b border-slate-200 px-3 py-2 text-xs text-rose-600">
+                        {attempt.error_message}
+                      </p>
+                    )}
+                    <div className="grid gap-3 p-3 lg:grid-cols-2">
+                      <div>
+                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">请求</div>
+                        <pre className="max-h-40 overflow-auto border border-slate-200 bg-slate-50 p-2 text-[11px] leading-5 text-slate-700">
+                          {formatJson(req?.body)}
+                        </pre>
+                      </div>
+                      <div>
+                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">响应</div>
+                        <pre className="max-h-40 overflow-auto border border-slate-200 bg-slate-50 p-2 text-[11px] leading-5 text-slate-700">
+                          {formatJson(attempt.response_body)}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }) : (
+                /* fallback: 尝试按旧格式解析（单次探测的纯字符串） */
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div>
+                    <div className="mb-2 text-xs font-semibold text-slate-600">请求体</div>
+                    <pre className="max-h-48 overflow-auto border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700">
+                      {formatJson(model.request_body)}
+                    </pre>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-xs font-semibold text-slate-600">响应体</div>
+                    <pre className="max-h-48 overflow-auto border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-700">
+                      {formatJson(model.response_body)}
+                    </pre>
+                  </div>
+                </div>
+              )}
             </div>
           </td>
         </tr>
@@ -252,7 +326,7 @@ export default function DashboardPage() {
 
                           {probeResult.models.length > 0 && (
                             <div className="overflow-x-auto border border-slate-200 bg-white">
-                              <table className="w-full min-w-[880px] text-left">
+                              <table className="w-full min-w-[980px] text-left">
                                 <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                                   <tr>
                                     <th className="px-4 py-3">模型</th>
@@ -260,6 +334,7 @@ export default function DashboardPage() {
                                     <th className="px-4 py-3">TTFT</th>
                                     <th className="px-4 py-3">响应</th>
                                     <th className="px-4 py-3">错误</th>
+                                    <th className="px-4 py-3">风险</th>
                                     <th className="px-4 py-3 text-right">详情</th>
                                   </tr>
                                 </thead>

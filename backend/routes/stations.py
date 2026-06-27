@@ -35,6 +35,8 @@ class StationImportItem(BaseModel):
     name: str
     base_url: str
     api_key: str
+    schedule_enabled: bool = True
+    schedule_interval_hours: int = 6
 
 
 def _mask_key(encrypted: str) -> str:
@@ -113,6 +115,8 @@ async def import_stations(
             name=item.name.strip(),
             base_url=item.base_url.strip().rstrip("/"),
             api_key_encrypted=encrypted,
+            schedule_enabled=1 if item.schedule_enabled else 0,
+            schedule_interval_hours=item.schedule_interval_hours,
             created_at=now,
             updated_at=now,
         )

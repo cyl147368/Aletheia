@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getLatestResult, getStation, triggerProbe, type ProbeResult, type Station } from '../api';
+import {
+  capabilityFlagLabel,
+  degradationFlagLabel,
+  parseCapabilityFlags,
+  parseFlags,
+} from '../utils/probeDisplay';
 
 const statusText: Record<string, string> = { ok: '正常', degraded: '部分故障', down: '宕机', unknown: '未探测' };
 const statusClass: Record<string, string> = {
@@ -124,26 +130,49 @@ export default function StationDetailPage() {
                 <th className="px-4 py-3">TTFT</th>
                 <th className="px-4 py-3">响应预览</th>
                 <th className="px-4 py-3">错误</th>
+                <th className="px-4 py-3">风险</th>
               </tr>
             </thead>
             <tbody>
-              {latestModels.map((model) => (
-                <tr key={model.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-800">{model.model_id}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex min-w-16 justify-center border px-2 py-1 text-xs font-medium ${model.available ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-                      {model.available ? '可用' : '不可用'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-700">{model.available ? `${model.ttft_ms}ms` : '-'}</td>
-                  <td className="max-w-56 px-4 py-3 text-xs text-slate-500">
-                    <div className="truncate" title={model.response_preview ?? ''}>{model.response_preview || '-'}</div>
-                  </td>
-                  <td className="max-w-56 px-4 py-3 text-xs text-rose-500">
-                    <div className="truncate" title={model.error_message ?? ''}>{model.error_message || '-'}</div>
-                  </td>
-                </tr>
-              ))}
+              {latestModels.map((model) => {
+                const flags = parseFlags(model.degradation_flags);
+                const capabilities = parseCapabilityFlags(model.degradation_flags);
+                return (
+                  <tr key={model.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-800">{model.model_id}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex min-w-16 justify-center border px-2 py-1 text-xs font-medium ${model.available ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                        {model.available ? '可用' : '不可用'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{model.available ? `${model.ttft_ms}ms` : '-'}</td>
+                    <td className="max-w-56 px-4 py-3 text-xs text-slate-500">
+                      <div className="truncate" title={model.response_preview ?? ''}>{model.response_preview || '-'}</div>
+                    </td>
+                    <td className="max-w-56 px-4 py-3 text-xs text-rose-500">
+                      <div className="truncate" title={model.error_message ?? ''}>{model.error_message || '-'}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {flags.length > 0 || capabilities.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {flags.map((flag) => (
+                            <span key={flag} className="inline-flex border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                              {degradationFlagLabel[flag] ?? flag}
+                            </span>
+                          ))}
+                          {capabilities.map((flag) => (
+                            <span key={flag} className="inline-flex border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                              {capabilityFlagLabel[flag] ?? flag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </section>

@@ -74,6 +74,11 @@ async def trigger_probe(
             error_message=mr.get("error_message"),
             request_body=json.dumps(mr.get("request_body")) if mr.get("request_body") else None,
             response_body=json.dumps(mr.get("response_body")) if mr.get("response_body") else None,
+            authenticity_score=mr.get("authenticity_score"),
+            degradation_flags=json.dumps({
+                "risks": mr.get("degradation_flags", []),
+                "capabilities": mr.get("capability_flags", []),
+            }),
         ))
 
     # 更新站点状态
@@ -177,6 +182,8 @@ async def latest_result(
                 "error_message": m.error_message,
                 "request_body": m.request_body,
                 "response_body": m.response_body,
+                "authenticity_score": m.authenticity_score,
+                "degradation_flags": m.degradation_flags,
             }
             for m in models
         ],
@@ -215,6 +222,8 @@ async def batch_detail(
                 "error_message": m.error_message,
                 "request_body": m.request_body,
                 "response_body": m.response_body,
+                "authenticity_score": m.authenticity_score,
+                "degradation_flags": m.degradation_flags,
             }
             for m in models
         ],

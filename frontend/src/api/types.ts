@@ -29,6 +29,26 @@ export interface ModelResult {
   error_message: string | null;
   request_body: string | null;
   response_body: string | null;
+  authenticity_score: number | null;
+  degradation_flags: string | null;
+}
+
+export interface ProbeAttempt {
+  provider: string;
+  endpoint: string;
+  url: string;
+  available: boolean;
+  ttft_ms: number;
+  response_preview: string | null;
+  error_message: string | null;
+  response_body: unknown;
+}
+
+export interface ProbeRequestRecord {
+  provider: string;
+  endpoint: string;
+  url: string;
+  body: unknown;
 }
 
 export interface ProbeResult {

@@ -74,6 +74,8 @@ export default function ManagePage() {
           name: formName.trim(),
           base_url: formUrl.trim(),
           api_key: formKey.trim(),
+          schedule_enabled: formScheduleEnabled,
+          schedule_interval_hours: formInterval,
         });
       }
       resetForm();
@@ -96,7 +98,13 @@ export default function ManagePage() {
     setImporting(true);
     setImportMsg('');
     try {
-      let items: { name: string; base_url: string; api_key: string }[];
+      let items: {
+        name: string;
+        base_url: string;
+        api_key: string;
+        schedule_enabled?: boolean;
+        schedule_interval_hours?: number;
+      }[];
       try {
         items = JSON.parse(importText);
       } catch {
@@ -107,7 +115,11 @@ export default function ManagePage() {
         setImportMsg('必须是 JSON 数组');
         return;
       }
-      const imported = await importStations(items);
+      const imported = await importStations(items.map((item) => ({
+        ...item,
+        schedule_enabled: item.schedule_enabled ?? formScheduleEnabled,
+        schedule_interval_hours: item.schedule_interval_hours ?? formInterval,
+      })));
       setImportMsg(`成功导入 ${imported} 个中转站`);
       setImportText('');
       await fetchStations();
@@ -271,7 +283,7 @@ export default function ManagePage() {
         <aside className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-950">批量导入</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">粘贴 JSON 数组，字段包含 name、base_url、api_key。</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">粘贴 JSON 数组，字段包含 name、base_url、api_key，可选 schedule_enabled、schedule_interval_hours。</p>
           </div>
           <div className="p-4">
             <textarea

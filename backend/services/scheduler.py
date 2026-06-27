@@ -104,6 +104,11 @@ async def _probe_and_save(s: RelayStation, db: AsyncSession):
             error_message=mr.get("error_message"),
             request_body=json.dumps(mr.get("request_body")) if mr.get("request_body") else None,
             response_body=json.dumps(mr.get("response_body")) if mr.get("response_body") else None,
+            authenticity_score=mr.get("authenticity_score"),
+            degradation_flags=json.dumps({
+                "risks": mr.get("degradation_flags", []),
+                "capabilities": mr.get("capability_flags", []),
+            }),
         ))
 
     if result["available_models"] == 0:
