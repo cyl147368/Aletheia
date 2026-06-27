@@ -42,6 +42,7 @@ export interface ProbeAttempt {
   response_preview: string | null;
   error_message: string | null;
   response_body: unknown;
+  diagnostic_id?: string | null;
 }
 
 export interface ProbeRequestRecord {

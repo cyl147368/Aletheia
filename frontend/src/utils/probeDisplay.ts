@@ -28,7 +28,18 @@ export const capabilityFlagLabel: Record<string, string> = {
   tool_calling_likely: '工具调用',
 };
 
-export function diagnosticStatusLabel(flags: string[], authenticityScore: number | null): string | null {
+export function hasDiagnosticEvidence(attempts: ProbeAttempt[]): boolean {
+  return attempts.some((attempt) => Boolean(attempt.diagnostic_id));
+}
+
+export function diagnosticStatusLabel(
+  flags: string[],
+  authenticityScore: number | null,
+  available: boolean,
+  attempts: ProbeAttempt[],
+): string | null {
+  if (!available) return null;
+  if (!hasDiagnosticEvidence(attempts)) return null;
   if (flags.length > 0) return null;
   if (authenticityScore === null) return null;
   return authenticityScore >= 0.95 ? '套壳/降智通过' : '低置信通过';

@@ -26,6 +26,7 @@ from services.probe import (
     _build_diagnostic_requests,
     _build_probe_request,
     _build_probe_requests,
+    _with_1m_context_model,
     _summarize_batch_diagnostics,
 )
 
@@ -111,6 +112,20 @@ class ProbeRequestTest(unittest.TestCase):
         self.assertIn("Return only", claude[0].body["messages"][0]["content"])
         self.assertEqual(gemini[0].endpoint, "gemini_stream_generate_content_diagnostic")
         self.assertIn("Return only", gemini[0].body["contents"][0]["parts"][0]["text"])
+
+    def test_rebuilds_request_with_1m_context_suffix(self):
+        requests = _build_probe_requests(
+            "https://relay.example.com/v1",
+            "sk-test",
+            "claude-3-7-sonnet-20250219",
+            probe_settings(),
+        )
+
+        retried = _with_1m_context_model(requests[0])
+
+        self.assertEqual(retried.body["model"], "claude-3-7-sonnet-20250219[1m]")
+        self.assertEqual(retried.endpoint, requests[0].endpoint)
+        self.assertEqual(retried.url, requests[0].url)
 
     def test_diagnostic_analysis_scores_cross_provider_failures(self):
         attempts = [

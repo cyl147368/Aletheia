@@ -40,7 +40,7 @@ function ModelRow({ model }: { model: ModelResult }) {
   const requests = parseRequests(model.request_body);
   const flags = parseFlags(model.degradation_flags);
   const capabilities = parseCapabilityFlags(model.degradation_flags);
-  const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score);
+  const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score, model.available, attempts);
 
   return (
     <>

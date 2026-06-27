@@ -137,13 +137,13 @@ async def _probe_single_model(base_url: str, api_key: str, model_id: str, settin
 
     # OpenAI provider 有两个 endpoint; 主备策略: 先打首选,成功就直接收工,
     # 失败再试下一个。这样保证覆盖率,但绝大多数情况下只会有一次请求。
-    primary_attempt = await _send_probe_request(requests[0], settings)
+    primary_attempt = await _send_probe_request_with_retry(requests[0], settings)
     if primary_attempt["available"]:
         attempts = [primary_attempt]
     else:
         attempts = [primary_attempt]
         for fallback in requests[1:]:
-            fb = await _send_probe_request(fallback, settings)
+            fb = await _send_probe_request_with_retry(fallback, settings)
             attempts.append(fb)
             if fb["available"]:
                 break
@@ -384,6 +384,25 @@ def _count_values(values: list[str]) -> dict:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+async def _send_probe_request_with_retry(request: ProbeRequest, settings: Settings) -> dict:
+    attempt = await _send_probe_request(request, settings)
+    if attempt["available"] or not _needs_1m_context_retry(attempt):
+        return attempt
+
+    retry_request = _with_1m_context_model(request)
+    if retry_request.body == request.body:
+        return attempt
+
+    retry_attempt = await _send_probe_request(retry_request, settings)
+    retry_attempt["retry_of"] = request.body.get("model")
+    retry_attempt["retry_reason"] = "1m_context_required"
+    if retry_attempt["available"]:
+        return retry_attempt
+
+    attempt["error_message"] = f'{attempt.get("error_message")}; 1m retry: {retry_attempt.get("error_message")}'[:500]
+    return attempt
 
 
 async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict:
@@ -632,12 +651,32 @@ async def _run_diagnostic_requests(requests: list[ProbeRequest], settings: Setti
     for diagnostic_id in [case["id"] for case in DIAGNOSTIC_CASES]:
         candidates = grouped.get(diagnostic_id, [])
         for request in candidates:
-            attempt = await _send_probe_request(request, settings)
+            attempt = await _send_probe_request_with_retry(request, settings)
             attempts.append(attempt)
             if attempt["available"]:
                 break
 
     return attempts
+
+
+def _needs_1m_context_retry(attempt: dict) -> bool:
+    text = f'{attempt.get("error_message") or ""} {attempt.get("response_body") or ""}'
+    return "1m" in text.lower() and "上下文" in text and "启用" in text
+
+
+def _with_1m_context_model(request: ProbeRequest) -> ProbeRequest:
+    body = dict(request.body)
+    model = str(body.get("model", ""))
+    if model and not model.endswith("[1m]"):
+        body["model"] = f"{model}[1m]"
+    return ProbeRequest(
+        provider=request.provider,
+        endpoint=request.endpoint,
+        url=request.url,
+        headers=request.headers,
+        body=body,
+        diagnostic_id=request.diagnostic_id,
+    )
 
 
 def _detect_provider(model_id: str) -> str:

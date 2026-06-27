@@ -6,6 +6,7 @@ import {
   capabilityFlagLabel,
   degradationFlagLabel,
   diagnosticStatusLabel,
+  parseAttempts,
   parseCapabilityFlags,
   parseFlags,
 } from '../utils/probeDisplay';
@@ -137,8 +138,9 @@ export default function StationDetailPage() {
             <tbody>
               {latestModels.map((model) => {
                 const flags = parseFlags(model.degradation_flags);
+                const attempts = parseAttempts(model.response_body);
                 const capabilities = parseCapabilityFlags(model.degradation_flags);
-                const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score);
+                const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score, model.available, attempts);
                 return (
                   <tr key={model.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-xs text-slate-800">{model.model_id}</td>

@@ -76,7 +76,7 @@ export default function ProbeResultPage() {
             const requests = parseRequests(model.request_body);
             const flags = parseFlags(model.degradation_flags);
             const capabilities = parseCapabilityFlags(model.degradation_flags);
-            const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score);
+            const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score, model.available, attempts);
             return (
               <article key={model.id} className="px-4 py-4">
                 <header className="flex flex-wrap items-center justify-between gap-2">
