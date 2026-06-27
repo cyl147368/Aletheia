@@ -5,6 +5,7 @@ import { getLatestResult, getStation, triggerProbe, type ProbeResult, type Stati
 import {
   capabilityFlagLabel,
   degradationFlagLabel,
+  diagnosticStatusLabel,
   parseCapabilityFlags,
   parseFlags,
 } from '../utils/probeDisplay';
@@ -130,13 +131,14 @@ export default function StationDetailPage() {
                 <th className="px-4 py-3">TTFT</th>
                 <th className="px-4 py-3">响应预览</th>
                 <th className="px-4 py-3">错误</th>
-                <th className="px-4 py-3">风险</th>
+                <th className="px-4 py-3">套壳/降智/能力</th>
               </tr>
             </thead>
             <tbody>
               {latestModels.map((model) => {
                 const flags = parseFlags(model.degradation_flags);
                 const capabilities = parseCapabilityFlags(model.degradation_flags);
+                const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score);
                 return (
                   <tr key={model.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-xs text-slate-800">{model.model_id}</td>
@@ -153,8 +155,13 @@ export default function StationDetailPage() {
                       <div className="truncate" title={model.error_message ?? ''}>{model.error_message || '-'}</div>
                     </td>
                     <td className="px-4 py-3">
-                      {flags.length > 0 || capabilities.length > 0 ? (
+                      {flags.length > 0 || capabilities.length > 0 || diagnosticStatus ? (
                         <div className="flex flex-wrap gap-1">
+                          {diagnosticStatus && (
+                            <span className="inline-flex border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                              {diagnosticStatus}
+                            </span>
+                          )}
                           {flags.map((flag) => (
                             <span key={flag} className="inline-flex border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                               {degradationFlagLabel[flag] ?? flag}

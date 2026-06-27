@@ -5,6 +5,7 @@ import {
   attemptRole,
   capabilityFlagLabel,
   degradationFlagLabel,
+  diagnosticStatusLabel,
   endpointLabel,
   formatJson,
   parseAttempts,
@@ -39,6 +40,7 @@ function ModelRow({ model }: { model: ModelResult }) {
   const requests = parseRequests(model.request_body);
   const flags = parseFlags(model.degradation_flags);
   const capabilities = parseCapabilityFlags(model.degradation_flags);
+  const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score);
 
   return (
     <>
@@ -55,8 +57,13 @@ function ModelRow({ model }: { model: ModelResult }) {
           <div className="truncate" title={model.error_message || ''}>{model.error_message || '-'}</div>
         </td>
         <td className="px-4 py-3">
-          {flags.length > 0 || capabilities.length > 0 ? (
+          {flags.length > 0 || capabilities.length > 0 || diagnosticStatus ? (
             <div className="flex flex-wrap gap-1">
+              {diagnosticStatus && (
+                <span className="inline-flex border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                  {diagnosticStatus}
+                </span>
+              )}
               {flags.map((flag) => (
                 <span key={flag} className="inline-flex border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                   {degradationFlagLabel[flag] ?? flag}
@@ -334,7 +341,7 @@ export default function DashboardPage() {
                                     <th className="px-4 py-3">TTFT</th>
                                     <th className="px-4 py-3">响应</th>
                                     <th className="px-4 py-3">错误</th>
-                                    <th className="px-4 py-3">风险</th>
+                                    <th className="px-4 py-3">套壳/降智/能力</th>
                                     <th className="px-4 py-3 text-right">详情</th>
                                   </tr>
                                 </thead>

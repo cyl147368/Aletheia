@@ -5,6 +5,7 @@ import {
   attemptRole,
   capabilityFlagLabel,
   degradationFlagLabel,
+  diagnosticStatusLabel,
   endpointLabel,
   formatJson,
   parseAttempts,
@@ -75,6 +76,7 @@ export default function ProbeResultPage() {
             const requests = parseRequests(model.request_body);
             const flags = parseFlags(model.degradation_flags);
             const capabilities = parseCapabilityFlags(model.degradation_flags);
+            const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score);
             return (
               <article key={model.id} className="px-4 py-4">
                 <header className="flex flex-wrap items-center justify-between gap-2">
@@ -96,8 +98,13 @@ export default function ProbeResultPage() {
                     </span>
                   )}
                 </header>
-                {(flags.length > 0 || capabilities.length > 0) && (
+                {(flags.length > 0 || capabilities.length > 0 || diagnosticStatus) && (
                   <div className="mt-2 flex flex-wrap gap-1">
+                    {diagnosticStatus && (
+                      <span className="inline-flex border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        {diagnosticStatus}
+                      </span>
+                    )}
                     {flags.map((flag) => (
                       <span key={flag} className="inline-flex border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                         {degradationFlagLabel[flag] ?? flag}
