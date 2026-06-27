@@ -26,6 +26,7 @@ from services.probe import (
     _build_diagnostic_requests,
     _build_probe_request,
     _build_probe_requests,
+    _merge_1m_retry_failure,
     _probe_attempt_to_request_record,
     _with_1m_context_model,
     _summarize_batch_diagnostics,
@@ -142,6 +143,30 @@ class ProbeRequestTest(unittest.TestCase):
         )
 
         self.assertEqual(record["body"]["model"], "claude-3-7-sonnet-20250219[1m]")
+
+    def test_failed_1m_retry_keeps_retry_request_body_visible(self):
+        original = {
+            "provider": "anthropic",
+            "endpoint": "anthropic_messages",
+            "url": "https://relay.example.com/v1/messages",
+            "available": False,
+            "error_message": "1m 上下文已经全量可用，请启用 1m 上下文后重试",
+            "request_body": {"model": "claude-3-7-sonnet-20250219"},
+        }
+        retry = {
+            "provider": "anthropic",
+            "endpoint": "anthropic_messages",
+            "url": "https://relay.example.com/v1/messages",
+            "available": False,
+            "error_message": "still unavailable",
+            "request_body": {"model": "claude-3-7-sonnet-20250219[1m]"},
+        }
+
+        merged = _merge_1m_retry_failure(original, retry)
+
+        self.assertEqual(merged["request_body"]["model"], "claude-3-7-sonnet-20250219[1m]")
+        self.assertIn("original:", merged["error_message"])
+        self.assertIn("1m retry:", merged["error_message"])
 
     def test_diagnostic_analysis_scores_cross_provider_failures(self):
         attempts = [

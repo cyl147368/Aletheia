@@ -390,8 +390,20 @@ async def _send_probe_request_with_retry(request: ProbeRequest, settings: Settin
     if retry_attempt["available"]:
         return retry_attempt
 
-    attempt["error_message"] = f'{attempt.get("error_message")}; 1m retry: {retry_attempt.get("error_message")}'[:500]
-    return attempt
+    return _merge_1m_retry_failure(attempt, retry_attempt)
+
+
+def _merge_1m_retry_failure(original_attempt: dict, retry_attempt: dict) -> dict:
+    retry_attempt["error_message"] = (
+        f'original: {original_attempt.get("error_message")}; '
+        f'1m retry: {retry_attempt.get("error_message")}'
+    )[:500]
+    retry_attempt["response_body"] = {
+        "original_response_body": original_attempt.get("response_body"),
+        "retry_response_body": retry_attempt.get("response_body"),
+    }
+    retry_attempt["retry_reason"] = retry_attempt.get("retry_reason") or "1m_context_required"
+    return retry_attempt
 
 
 def _probe_request_to_record(request: ProbeRequest) -> dict:
