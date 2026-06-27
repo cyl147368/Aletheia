@@ -125,13 +125,8 @@ async def _probe_single_model(base_url: str, api_key: str, model_id: str, settin
     }
 
     requests = _build_probe_requests(base_url, api_key, model_id, settings)
-    result["request_body"] = [
-        {
-            "provider": request.provider,
-            "endpoint": request.endpoint,
-            "url": request.url,
-            "body": request.body,
-        }
+    planned_requests = [
+        _probe_request_to_record(request)
         for request in requests
     ]
 
@@ -169,20 +164,14 @@ async def _probe_single_model(base_url: str, api_key: str, model_id: str, settin
         attempts[0]["endpoint"],
     )
     diagnostic_requests = _build_diagnostic_requests(base_url, api_key, model_id, settings)
-    result["request_body"].extend(
-        {
-            "provider": request.provider,
-            "endpoint": request.endpoint,
-            "url": request.url,
-            "body": request.body,
-            "diagnostic_id": request.diagnostic_id,
-        }
-        for request in diagnostic_requests
-    )
+    planned_requests.extend(_probe_request_to_record(request) for request in diagnostic_requests)
     diagnostic_attempts = []
     if successful_attempts:
         diagnostic_attempts = await _run_diagnostic_requests(diagnostic_requests, settings)
-    result["response_body"] = attempts + diagnostic_attempts
+    all_attempts = attempts + diagnostic_attempts
+    result["response_body"] = all_attempts
+    actual_requests = [_probe_attempt_to_request_record(attempt) for attempt in all_attempts]
+    result["request_body"] = actual_requests or planned_requests
     degradation = _analyze_degradation(attempts)
     claims = _analyze_model_claims(model_id, attempts)
     diagnostics = _analyze_diagnostic_attempts(diagnostic_attempts)
@@ -405,6 +394,26 @@ async def _send_probe_request_with_retry(request: ProbeRequest, settings: Settin
     return attempt
 
 
+def _probe_request_to_record(request: ProbeRequest) -> dict:
+    return {
+        "provider": request.provider,
+        "endpoint": request.endpoint,
+        "url": request.url,
+        "body": request.body,
+        "diagnostic_id": request.diagnostic_id,
+    }
+
+
+def _probe_attempt_to_request_record(attempt: dict) -> dict:
+    return {
+        "provider": attempt.get("provider"),
+        "endpoint": attempt.get("endpoint"),
+        "url": attempt.get("url"),
+        "body": attempt.get("request_body"),
+        "diagnostic_id": attempt.get("diagnostic_id"),
+    }
+
+
 async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict:
     attempt = {
         "provider": request.provider,
@@ -416,6 +425,7 @@ async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict
         "error_message": None,
         "response_body": None,
         "diagnostic_id": request.diagnostic_id,
+        "request_body": request.body,
     }
     t_start = time.monotonic()
 

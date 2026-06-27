@@ -26,6 +26,7 @@ from services.probe import (
     _build_diagnostic_requests,
     _build_probe_request,
     _build_probe_requests,
+    _probe_attempt_to_request_record,
     _with_1m_context_model,
     _summarize_batch_diagnostics,
 )
@@ -126,6 +127,21 @@ class ProbeRequestTest(unittest.TestCase):
         self.assertEqual(retried.body["model"], "claude-3-7-sonnet-20250219[1m]")
         self.assertEqual(retried.endpoint, requests[0].endpoint)
         self.assertEqual(retried.url, requests[0].url)
+
+    def test_attempt_request_record_prefers_actual_retry_body(self):
+        record = _probe_attempt_to_request_record(
+            {
+                "provider": "anthropic",
+                "endpoint": "anthropic_messages",
+                "url": "https://relay.example.com/v1/messages",
+                "request_body": {
+                    "model": "claude-3-7-sonnet-20250219[1m]",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
+            }
+        )
+
+        self.assertEqual(record["body"]["model"], "claude-3-7-sonnet-20250219[1m]")
 
     def test_diagnostic_analysis_scores_cross_provider_failures(self):
         attempts = [
