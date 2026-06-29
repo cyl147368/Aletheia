@@ -1,5 +1,38 @@
 import type { ProbeAttempt, ProbeRequestRecord } from '../api';
 
+export interface VeridropDetectorResult {
+  name: string;
+  display_name?: string;
+  status: 'pass' | 'fail' | 'skip' | 'error' | string;
+  score: number;
+  weight: number;
+  duration_ms?: number | null;
+  error?: string | null;
+  details?: Record<string, unknown>;
+}
+
+export interface VeridropReport {
+  protocol: string;
+  tier: string;
+  tier_title?: string;
+  tier_message?: string;
+  target_model: string;
+  mode: 'quick' | 'standard' | 'full' | string;
+  total_score: number;
+  verdict: 'passed' | 'marginal' | 'failed' | string;
+  summary?: string;
+  performance?: {
+    total_latency_ms?: number;
+    ttft_ms?: number | null;
+    request_count?: number;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
+  };
+  results: VeridropDetectorResult[];
+}
+
 export const endpointLabel: Record<string, string> = {
   openai_chat_completions: 'Chat Completions',
   openai_responses: 'Responses',
@@ -91,6 +124,26 @@ export function parseAttempts(value: string | null): ProbeAttempt[] {
     /* fall through */
   }
   return [];
+}
+
+export function parseVeridropReport(value: string | null): VeridropReport | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      Array.isArray(parsed.results) &&
+      typeof parsed.total_score === 'number' &&
+      typeof parsed.verdict === 'string'
+    ) {
+      return parsed as VeridropReport;
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
 }
 
 export function parseRequests(value: string | null): ProbeRequestRecord[] {

@@ -32,6 +32,8 @@ from services.probe import (
     _list_models,
     list_model_catalog,
     _merge_1m_retry_failure,
+    _pick_probe_prompt,
+    PROBE_PROMPT_POOL_SIZE,
     _probe_attempt_to_request_record,
     _probe_request_to_record,
     _with_1m_context_model,
@@ -323,6 +325,30 @@ class ModelListTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ProbeRequestTest(unittest.TestCase):
+    def test_default_probe_prompt_uses_large_random_pool(self):
+        self.assertGreaterEqual(PROBE_PROMPT_POOL_SIZE, 10_000)
+
+        prompts = {_pick_probe_prompt(probe_settings()) for _ in range(40)}
+
+        self.assertGreater(len(prompts), 1)
+        self.assertNotIn("hi", prompts)
+
+    def test_custom_probe_prompt_is_respected(self):
+        settings = SimpleNamespace(probe_prompt="hello there", probe_max_tokens=5, probe_timeout_seconds=30)
+
+        self.assertEqual(_pick_probe_prompt(settings), "hello there")
+
+    def test_openai_fallback_requests_share_one_random_prompt(self):
+        requests = _build_probe_requests(
+            "https://relay.example.com",
+            "sk-test",
+            "gpt-4o-mini",
+            probe_settings(),
+            "Reply briefly: describe a stable API.",
+        )
+
+        self.assertEqual(requests[0].body["input"], requests[1].body["messages"][0]["content"])
+
     def test_openai_model_uses_responses_and_chat_completions_urls(self):
         requests = _build_probe_requests(
             "https://relay.example.com",
@@ -336,10 +362,11 @@ class ProbeRequestTest(unittest.TestCase):
         self.assertEqual(requests[0].url, "https://relay.example.com/v1/responses")
         self.assertEqual(requests[0].headers["Authorization"], "Bearer sk-test")
         self.assertEqual(requests[0].body["model"], "gpt-4o-mini")
-        self.assertEqual(requests[0].body["input"], "hi")
+        self.assertNotEqual(requests[0].body["input"], "hi")
+        self.assertEqual(requests[0].body["input"], requests[1].body["messages"][0]["content"])
         self.assertEqual(requests[0].body["max_output_tokens"], 16)
         self.assertEqual(requests[1].url, "https://relay.example.com/v1/chat/completions")
-        self.assertEqual(requests[1].body["messages"][0]["content"], "hi")
+        self.assertEqual(requests[1].body["messages"][0]["content"], requests[0].body["input"])
 
     def test_claude_model_uses_anthropic_messages_url(self):
         req = _build_probe_request(
@@ -370,7 +397,7 @@ class ProbeRequestTest(unittest.TestCase):
             "https://relay.example.com/v1beta/models/gemini-1.5-pro:streamGenerateContent?alt=sse",
         )
         self.assertEqual(req.headers["x-goog-api-key"], "sk-test")
-        self.assertEqual(req.body["contents"][0]["parts"][0]["text"], "hi")
+        self.assertNotEqual(req.body["contents"][0]["parts"][0]["text"], "hi")
 
     def test_builds_provider_specific_diagnostic_requests(self):
         openai = _build_diagnostic_requests(

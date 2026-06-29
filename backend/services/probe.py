@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 import logging
+import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import quote, urlencode
@@ -65,6 +66,97 @@ DIAGNOSTIC_CASES = [
         "flag": "spurious_refusal",
     },
 ]
+
+PROBE_PROMPT_PREFIXES = (
+    "Reply briefly:",
+    "In one short phrase, answer:",
+    "Give a concise answer:",
+    "Use five words or fewer:",
+    "Answer plainly:",
+    "Respond with a short sentence:",
+    "Give a tiny summary:",
+    "Keep it brief:",
+    "Say this naturally:",
+    "Answer in a few words:",
+)
+PROBE_PROMPT_TASKS = (
+    "what is a calm morning like",
+    "name one benefit of clean logs",
+    "describe a stable API",
+    "what makes a dashboard useful",
+    "name a common debugging step",
+    "describe fresh rain",
+    "what does latency mean",
+    "name a useful CLI habit",
+    "describe a quiet workspace",
+    "what is a health check for",
+    "name one safe rollout practice",
+    "describe reliable routing",
+    "what is a concise commit message",
+    "name one reason to monitor errors",
+    "describe a readable chart",
+    "what is graceful fallback",
+    "name one sign of good docs",
+    "describe a clear API response",
+    "what is token usage",
+    "name a simple smoke test",
+    "describe a helpful alert",
+    "what makes retries useful",
+    "name one deployment check",
+    "describe a low-noise interface",
+    "what is first-token latency",
+    "name one reason to cache data",
+    "describe a small refactor",
+    "what is a model endpoint",
+    "name one useful status label",
+    "describe a passing test",
+    "what is structured output",
+    "name one way to reduce risk",
+    "describe a clean error message",
+    "what is a request timeout",
+    "name one thing logs should include",
+    "describe a healthy service",
+    "what is API compatibility",
+    "name one useful metric",
+    "describe a quick probe",
+    "what does availability mean",
+)
+PROBE_PROMPT_CONTEXTS = (
+    "for a developer",
+    "for an operator",
+    "for a teammate",
+    "for a release note",
+    "for a status page",
+    "for a tiny checklist",
+    "for a notebook",
+    "for a monitoring panel",
+    "for a project README",
+    "for a service owner",
+    "for a support reply",
+    "for an incident note",
+    "for a config review",
+    "for a test plan",
+    "for a CLI user",
+    "for a product engineer",
+    "for a backend engineer",
+    "for a frontend engineer",
+    "for an API consumer",
+    "for a system admin",
+    "in simple English",
+    "with no markdown",
+    "as a plain sentence",
+    "as a short label",
+    "as a friendly note",
+    "as a neutral phrase",
+    "as a compact answer",
+    "as a quick confirmation",
+    "as a small observation",
+    "as a calm response",
+)
+
+PROBE_PROMPT_POOL_SIZE = (
+    len(PROBE_PROMPT_PREFIXES) * len(PROBE_PROMPT_TASKS) * len(PROBE_PROMPT_CONTEXTS)
+)
 
 
 async def probe_station(
@@ -562,7 +654,8 @@ async def _probe_single_model(base_url: str, api_key: str, model_id: str, settin
         "degradation_flags": [],
     }
 
-    requests = _build_probe_requests(base_url, api_key, model_id, settings)
+    probe_prompt = _pick_probe_prompt(settings)
+    requests = _build_probe_requests(base_url, api_key, model_id, settings, probe_prompt)
     planned_requests = [
         _probe_request_to_record(request)
         for request in requests
@@ -946,8 +1039,30 @@ async def _send_probe_request(request: ProbeRequest, settings: Settings) -> dict
     return attempt
 
 
-def _build_probe_requests(base_url: str, api_key: str, model_id: str, settings: Settings) -> list[ProbeRequest]:
+def _pick_probe_prompt(settings: Settings) -> str:
+    configured = getattr(settings, "probe_prompt", "hi")
+    if configured and configured.strip().lower() != "hi":
+        return configured.strip()
+
+    index = random.randrange(PROBE_PROMPT_POOL_SIZE)
+    context_count = len(PROBE_PROMPT_CONTEXTS)
+    task_count = len(PROBE_PROMPT_TASKS)
+    prefix = PROBE_PROMPT_PREFIXES[index // (task_count * context_count)]
+    remainder = index % (task_count * context_count)
+    task = PROBE_PROMPT_TASKS[remainder // context_count]
+    context = PROBE_PROMPT_CONTEXTS[remainder % context_count]
+    return f"{prefix} {task} {context}."
+
+
+def _build_probe_requests(
+    base_url: str,
+    api_key: str,
+    model_id: str,
+    settings: Settings,
+    probe_prompt: str | None = None,
+) -> list[ProbeRequest]:
     provider = _detect_provider(model_id)
+    prompt = probe_prompt or _pick_probe_prompt(settings)
 
     if provider == "anthropic":
         return [
@@ -962,7 +1077,7 @@ def _build_probe_requests(base_url: str, api_key: str, model_id: str, settings: 
                 },
                 body={
                     "model": model_id,
-                    "messages": [{"role": "user", "content": settings.probe_prompt}],
+                    "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": settings.probe_max_tokens,
                     "stream": True,
                 },
@@ -987,7 +1102,7 @@ def _build_probe_requests(base_url: str, api_key: str, model_id: str, settings: 
                     "contents": [
                         {
                             "role": "user",
-                            "parts": [{"text": settings.probe_prompt}],
+                            "parts": [{"text": prompt}],
                         }
                     ],
                     "generationConfig": {"maxOutputTokens": settings.probe_max_tokens},
@@ -1007,7 +1122,7 @@ def _build_probe_requests(base_url: str, api_key: str, model_id: str, settings: 
             headers=openai_headers,
             body={
                 "model": model_id,
-                "input": settings.probe_prompt,
+                "input": prompt,
                 "max_output_tokens": max(settings.probe_max_tokens, 16),
                 "stream": True,
                 "store": False,
@@ -1020,7 +1135,7 @@ def _build_probe_requests(base_url: str, api_key: str, model_id: str, settings: 
             headers=openai_headers,
             body={
                 "model": model_id,
-                "messages": [{"role": "user", "content": settings.probe_prompt}],
+                "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": settings.probe_max_tokens,
                 "stream": True,
                 "stream_options": {"include_usage": True},

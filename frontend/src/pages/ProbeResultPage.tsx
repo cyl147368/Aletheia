@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getBatchDetail, getStation, type ProbeResult, type Station } from '../api';
+import { VeridropReportPanel } from '../components/VeridropReportPanel';
 import {
   attemptRole,
   capabilityFlagLabel,
@@ -13,6 +14,7 @@ import {
   parseCapabilityFlags,
   parseFlags,
   parseRequests,
+  parseVeridropReport,
 } from '../utils/probeDisplay';
 
 export default function ProbeResultPage() {
@@ -79,6 +81,7 @@ export default function ProbeResultPage() {
             {result.models.map((model) => {
               const attempts = parseAttempts(model.response_body);
               const requests = parseRequests(model.request_body);
+              const veridropReport = parseVeridropReport(model.response_body);
               const flags = parseFlags(model.degradation_flags);
               const capabilities = parseCapabilityFlags(model.degradation_flags);
               const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score, model.available, attempts);
@@ -121,7 +124,9 @@ export default function ProbeResultPage() {
                   {isExpanded && (
                     <div className="border-t px-5 py-4" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
                       <div className="space-y-2.5">
-                        {attempts.map((attempt, idx) => {
+                        {veridropReport ? (
+                          <VeridropReportPanel report={veridropReport} />
+                        ) : attempts.map((attempt, idx) => {
                           const req = requests[idx];
                           return (
                             <div key={`${attempt.endpoint}-${idx}`} className="panel overflow-hidden" style={{ borderRadius: 10 }}>

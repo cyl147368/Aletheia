@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { getLatestResult, getStation, getStationModels, triggerProbe, type DetectionMode, type ModelCatalogItem, type ModelPricing, type ProbeResult, type Station } from '../api';
+import { VeridropReportPanel } from '../components/VeridropReportPanel';
 import {
   capabilityFlagLabel,
   degradationFlagLabel,
@@ -13,6 +14,7 @@ import {
   attemptRole,
   formatJson,
   formatRequestRecord,
+  parseVeridropReport,
   parseRequests,
 } from '../utils/probeDisplay';
 
@@ -70,11 +72,14 @@ function formatProbeTime(value: string) {
 function ModelExpandRow({ model }: { model: NonNullable<ProbeResult>['models'][number] }) {
   const attempts = parseAttempts(model.response_body);
   const requests = parseRequests(model.request_body);
+  const veridropReport = parseVeridropReport(model.response_body);
 
   return (
     <td colSpan={6} className="px-5 py-4" style={{ background: 'var(--surface-2)' }}>
       <div className="space-y-2.5">
-        {attempts.length > 0 ? attempts.map((attempt, idx) => {
+        {veridropReport ? (
+          <VeridropReportPanel report={veridropReport} />
+        ) : attempts.length > 0 ? attempts.map((attempt, idx) => {
           const req = requests[idx];
           return (
             <div key={`${attempt.endpoint}-${idx}`} className="panel overflow-hidden" style={{ borderRadius: 10 }}>
