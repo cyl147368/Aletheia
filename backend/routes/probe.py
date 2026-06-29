@@ -12,6 +12,7 @@ from config import Settings
 from database import get_db
 from models import RelayStation, ProbeBatch, ModelResult
 from routes.auth_middleware import require_auth
+from services.deep_probe import deep_probe_station, normalize_detection_mode
 from services.probe import list_model_catalog, probe_station
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/api", tags=["probe"], dependencies=[Depends(require_
 
 class ProbeRequestBody(BaseModel):
     model_ids: list[str] | None = None
+    mode: str | None = None
 
 
 def _normalize_selected_model_ids(model_ids: list[str] | None) -> list[str] | None:
@@ -58,7 +60,17 @@ async def trigger_probe(
     if selected_model_ids is not None and len(selected_model_ids) == 0:
         raise HTTPException(status_code=400, detail="Select at least one model")
 
-    result = await probe_station(s.base_url, s.api_key_encrypted, settings, selected_model_ids)
+    mode = body.mode if body else None
+    if mode is not None:
+        try:
+            normalize_detection_mode(mode)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if selected_model_ids is None:
+            raise HTTPException(status_code=400, detail="Select at least one model for deep detection")
+        result = await deep_probe_station(s.base_url, s.api_key_encrypted, settings, selected_model_ids, mode)
+    else:
+        result = await probe_station(s.base_url, s.api_key_encrypted, settings, selected_model_ids)
     if "error" in result and result["error"].startswith("Selected models not found"):
         raise HTTPException(status_code=400, detail=result["error"])
 

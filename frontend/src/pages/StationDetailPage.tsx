@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getLatestResult, getStation, getStationModels, triggerProbe, type ModelCatalogItem, type ModelPricing, type ProbeResult, type Station } from '../api';
+import { getLatestResult, getStation, getStationModels, triggerProbe, type DetectionMode, type ModelCatalogItem, type ModelPricing, type ProbeResult, type Station } from '../api';
 import {
   capabilityFlagLabel,
   degradationFlagLabel,
@@ -22,6 +22,11 @@ const statusBadge: Record<string, string> = {
   degraded: 'bg-[var(--warn-dim)] text-[var(--warn-light)]',
   down: 'bg-[var(--bad-dim)] text-[var(--bad-light)]',
   unknown: 'bg-[var(--surface-2)] text-[var(--ink-dim)]',
+};
+const detectionModeLabel: Record<DetectionMode, string> = {
+  quick: '快速',
+  standard: '标准',
+  full: '完整',
 };
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
@@ -124,6 +129,7 @@ export default function StationDetailPage() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelLoadError, setModelLoadError] = useState('');
   const [probing, setProbing] = useState(false);
+  const [deepDetectingMode, setDeepDetectingMode] = useState<DetectionMode | null>(null);
   const [expandedModel, setExpandedModel] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -176,6 +182,25 @@ export default function StationDetailPage() {
     }
   };
 
+  const handleDeepDetection = async (mode: DetectionMode) => {
+    if (modelCatalog.length === 0) {
+      await fetchModels();
+      return;
+    }
+    const modelIds = Array.from(selectedModelIds);
+    if (modelIds.length === 0) {
+      alert('请至少选择一个模型');
+      return;
+    }
+    setDeepDetectingMode(mode);
+    try {
+      await triggerProbe(stationId, modelIds, mode);
+      await fetchData();
+    } finally {
+      setDeepDetectingMode(null);
+    }
+  };
+
   if (!station) return <div className="flex h-full items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;
 
   const ttftData = result?.models?.filter((m) => m.available).map((m) => ({
@@ -196,6 +221,7 @@ export default function StationDetailPage() {
       : loadingModels
         ? '获取中...'
         : '获取模型';
+  const isBusy = probing || deepDetectingMode !== null;
 
   const toggleModel = (modelId: string) => {
     setSelectedModelIds((prev) => {
@@ -232,7 +258,7 @@ export default function StationDetailPage() {
           </span>
           <button
             onClick={handleProbe}
-            disabled={probing || loadingModels || (hasModelCatalog && selectedCount === 0)}
+            disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
             className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
             style={{ background: 'var(--accent)', border: 'none' }}
           >
@@ -272,7 +298,7 @@ export default function StationDetailPage() {
               />
               <button
                 onClick={fetchModels}
-                disabled={loadingModels || probing}
+                disabled={loadingModels || isBusy}
                 className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
                 style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
               >
@@ -280,7 +306,7 @@ export default function StationDetailPage() {
               </button>
               <button
                 onClick={selectAllModels}
-                disabled={!hasModelCatalog || probing}
+                disabled={!hasModelCatalog || isBusy}
                 className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
                 style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
               >
@@ -288,12 +314,31 @@ export default function StationDetailPage() {
               </button>
               <button
                 onClick={clearModels}
-                disabled={!hasModelCatalog || probing}
+                disabled={!hasModelCatalog || isBusy}
                 className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
                 style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
               >
                 清空
               </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--line)' }}>
+            <div className="min-w-40">
+              <div className="text-[12px] font-semibold text-[var(--ink)]">Veridrop 深度检测</div>
+              <div className="mt-0.5 text-[10px] font-mono text-[var(--ink-faint)]">针对已选模型运行真伪/能力/协议检测</div>
+            </div>
+            <div className="ml-auto flex flex-wrap gap-2">
+              {(['quick', 'standard', 'full'] as DetectionMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => handleDeepDetection(mode)}
+                  disabled={isBusy || loadingModels || !hasModelCatalog || selectedCount === 0}
+                  className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
+                  style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
+                >
+                  {deepDetectingMode === mode ? `${detectionModeLabel[mode]}检测中...` : `${detectionModeLabel[mode]}检测`}
+                </button>
+              ))}
             </div>
           </div>
           {modelLoadError ? (
@@ -439,7 +484,7 @@ export default function StationDetailPage() {
             <p className="text-[13px] text-[var(--ink-faint)] mb-3">还没有探测记录</p>
             <button
               onClick={handleProbe}
-              disabled={probing || loadingModels || (hasModelCatalog && selectedCount === 0)}
+              disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
               className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
               style={{ background: 'var(--accent)', border: 'none' }}
             >

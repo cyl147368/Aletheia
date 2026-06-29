@@ -20,12 +20,25 @@ export const degradationFlagLabel: Record<string, string> = {
   reasoning_probe_failed: '推理探针失败',
   instruction_following_failed: '指令遵循失败',
   spurious_refusal: '异常拒答',
+  veridrop_passed: '深度检测通过',
+  veridrop_marginal: '深度检测存疑',
+  veridrop_failed: '深度检测失败',
+  deep_detection_error: '深度检测异常',
 };
 
 export const capabilityFlagLabel: Record<string, string> = {
   streaming_verified: '流式可用',
   vision_declared: '视觉模型',
   tool_calling_likely: '工具调用',
+  protocol_anthropic: 'Claude 协议',
+  protocol_openai: 'OpenAI 协议',
+  protocol_gemini: 'Gemini 协议',
+  mode_quick: '快速档',
+  mode_standard: '标准档',
+  mode_full: '完整档',
+  tier_cryptographic: '加密级',
+  tier_behavioral: '行为级',
+  tier_protocol: '协议级',
 };
 
 export function hasDiagnosticEvidence(attempts: ProbeAttempt[]): boolean {

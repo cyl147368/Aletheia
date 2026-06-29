@@ -57,7 +57,9 @@ export async function importStations(items: {
   return data.imported;
 }
 
-export async function triggerProbe(stationId: number, modelIds?: string[]): Promise<{
+export type DetectionMode = 'quick' | 'standard' | 'full';
+
+export async function triggerProbe(stationId: number, modelIds?: string[], mode?: DetectionMode): Promise<{
   batch_id: number;
   status: string;
   total_models: number;
@@ -66,7 +68,7 @@ export async function triggerProbe(stationId: number, modelIds?: string[]): Prom
   duration_ms: number;
   error?: string;
 }> {
-  const body = modelIds ? { model_ids: modelIds } : undefined;
+  const body = modelIds || mode ? { model_ids: modelIds, mode } : undefined;
   const { data } = await api.post(`/stations/${stationId}/probe`, body);
   return data;
 }
