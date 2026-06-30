@@ -1,45 +1,61 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getLatestDeepResult, getLatestResult, getStation, getStationModels, triggerProbe, type DetectionMode, type ModelCatalogItem, type ModelPricing, type ProbeResult, type Station } from '../api';
+import {
+  getLatestDeepResult,
+  getLatestResult,
+  getStation,
+  getStationHistory,
+  getStationModels,
+  triggerProbe,
+  type BatchSummary,
+  type DetectionMode,
+  type ModelCatalogItem,
+  type ModelPricing,
+  type ProbeResult,
+  type Station,
+} from '../api';
 import { VeridropReportPanel } from '../components/VeridropReportPanel';
 import {
+  attemptRole,
   capabilityFlagLabel,
   degradationFlagLabel,
   diagnosticStatusLabel,
+  endpointLabel,
+  formatJson,
+  formatRequestRecord,
   parseAttempts,
   parseCapabilityFlags,
   parseFlags,
-  endpointLabel,
-  attemptRole,
-  formatJson,
-  formatRequestRecord,
-  parseVeridropReport,
   parseRequests,
+  parseVeridropReport,
 } from '../utils/probeDisplay';
 
-const statusText: Record<string, string> = { ok: '正常', degraded: '部分故障', down: '宕机', unknown: '未探测' };
-const statusBadge: Record<string, string> = {
+const statusText: Record<Station['status'], string> = {
+  ok: '正常',
+  degraded: '需关注',
+  down: '异常',
+  unknown: '未探测',
+};
+
+const statusBadge: Record<Station['status'], string> = {
   ok: 'bg-[var(--ok-dim)] text-[var(--ok-light)]',
   degraded: 'bg-[var(--warn-dim)] text-[var(--warn-light)]',
   down: 'bg-[var(--bad-dim)] text-[var(--bad-light)]',
   unknown: 'bg-[var(--surface-2)] text-[var(--ink-dim)]',
 };
+
+const statusDot: Record<Station['status'], string> = {
+  ok: 'bg-[var(--ok-light)] text-[var(--ok-light)]',
+  degraded: 'bg-[var(--warn-light)] text-[var(--warn-light)]',
+  down: 'bg-[var(--bad-light)] text-[var(--bad-light)]',
+  unknown: 'bg-[var(--ink-faint)] text-[var(--ink-faint)]',
+};
+
 const detectionModeLabel: Record<DetectionMode, string> = {
   quick: '快速',
   standard: '标准',
   full: '完整',
 };
-
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="panel px-3 py-2" style={{ borderRadius: 8 }}>
-      <div className="font-mono text-[11px] text-[var(--ink-faint)]">{label}</div>
-      <div className="mt-0.5 font-mono text-sm font-semibold text-[var(--accent-light)]">{payload[0].value}ms</div>
-    </div>
-  );
-}
 
 function formatPrice(value?: number) {
   if (value === undefined) return null;
@@ -49,7 +65,7 @@ function formatPrice(value?: number) {
 }
 
 function formatPricing(pricing: ModelPricing | null) {
-  if (!pricing) return '—';
+  if (!pricing) return '无价格';
   const parts = [
     ['In', pricing.prompt],
     ['Out', pricing.completion],
@@ -59,7 +75,7 @@ function formatPricing(pricing: ModelPricing | null) {
     return formatted ? [`${label} ${formatted}`] : [];
   });
   const suffix = [pricing.currency, pricing.unit].filter(Boolean).join('/');
-  if (parts.length === 0) return '—';
+  if (parts.length === 0) return '无价格';
   const source = pricing.source === 'site' ? '站点价格' : pricing.source === 'official_estimate' ? '官方估算' : '价格';
   const price = suffix ? `${parts.join(' · ')} ${suffix}` : parts.join(' · ');
   return `${source} · ${price}`;
@@ -69,39 +85,45 @@ function formatProbeTime(value: string) {
   return new Date(value).toLocaleString('zh-CN');
 }
 
+function batchTypeLabel(type: BatchSummary['batch_type']) {
+  return type === 'deep' ? '深度检测' : '普通探测';
+}
+
 function ModelExpandRow({ model }: { model: NonNullable<ProbeResult>['models'][number] }) {
   const attempts = parseAttempts(model.response_body);
   const requests = parseRequests(model.request_body);
   const veridropReport = parseVeridropReport(model.response_body);
 
   return (
-    <td colSpan={6} className="px-5 py-4" style={{ background: 'var(--surface-2)' }}>
-      <div className="space-y-2.5">
+    <td colSpan={4} className="px-5 py-4" style={{ background: 'var(--surface-2)' }}>
+      <div className="space-y-3">
         {veridropReport ? (
           <VeridropReportPanel report={veridropReport} />
         ) : attempts.length > 0 ? attempts.map((attempt, idx) => {
           const req = requests[idx];
           return (
-            <div key={`${attempt.endpoint}-${idx}`} className="panel overflow-hidden" style={{ borderRadius: 10 }}>
+            <div key={`${attempt.endpoint}-${idx}`} className="panel overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: 'var(--line)' }}>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold text-[var(--ink)]">{endpointLabel[attempt.endpoint] ?? attempt.endpoint}</span>
-                  <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-[var(--ink-dim)]" style={{ borderColor: 'var(--line-soft)', background: 'var(--surface-2)' }}>{attemptRole(idx, attempts)}</span>
+                  <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-[var(--ink-dim)]" style={{ borderColor: 'var(--line-soft)' }}>{attemptRole(idx, attempts)}</span>
                   <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${attempt.available ? 'bg-[var(--ok-dim)] text-[var(--ok-light)]' : 'bg-[var(--bad-dim)] text-[var(--bad-light)]'}`}>
                     {attempt.available ? `TTFT ${attempt.ttft_ms}ms` : '失败'}
                   </span>
                 </div>
-                <code className="font-mono text-[11px] text-[var(--ink-faint)]">{attempt.url}</code>
+                <code className="max-w-full truncate font-mono text-[11px] text-[var(--ink-faint)]">{attempt.url}</code>
               </div>
-              {attempt.error_message && <p className="border-b px-3 py-2 text-xs" style={{ borderColor: 'var(--line)', color: 'var(--bad-light)', opacity: 0.8 }}>{attempt.error_message}</p>}
+              {attempt.error_message && (
+                <p className="border-b px-3 py-2 text-xs text-[var(--bad-light)]" style={{ borderColor: 'var(--line)' }}>{attempt.error_message}</p>
+              )}
               <div className="grid gap-3 p-3 lg:grid-cols-2">
                 <div>
-                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[var(--ink-faint)]">请求</div>
-                  <pre className="max-h-40 overflow-auto rounded-lg border p-2 text-[10px] leading-5 font-mono" style={{ borderColor: 'var(--line)', background: 'var(--bg)', color: 'var(--ink-dim)' }}>{formatRequestRecord(req)}</pre>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">请求</div>
+                  <pre className="max-h-40 overflow-auto rounded-md border p-2 font-mono text-[10px] leading-5 text-[var(--ink-dim)]" style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}>{formatRequestRecord(req)}</pre>
                 </div>
                 <div>
-                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[var(--ink-faint)]">响应</div>
-                  <pre className="max-h-40 overflow-auto rounded-lg border p-2 text-[10px] leading-5 font-mono" style={{ borderColor: 'var(--line)', background: 'var(--bg)', color: 'var(--ink-dim)' }}>{formatJson(attempt.response_body)}</pre>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">响应</div>
+                  <pre className="max-h-40 overflow-auto rounded-md border p-2 font-mono text-[10px] leading-5 text-[var(--ink-dim)]" style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}>{formatJson(attempt.response_body)}</pre>
                 </div>
               </div>
             </div>
@@ -109,12 +131,12 @@ function ModelExpandRow({ model }: { model: NonNullable<ProbeResult>['models'][n
         }) : (
           <div className="grid gap-3 lg:grid-cols-2">
             <div>
-              <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[var(--ink-faint)]">请求体</div>
-              <pre className="max-h-48 overflow-auto rounded-lg border p-3 text-xs leading-5 font-mono" style={{ borderColor: 'var(--line)', background: 'var(--bg)', color: 'var(--ink-dim)' }}>{formatJson(model.request_body)}</pre>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">请求体</div>
+              <pre className="max-h-48 overflow-auto rounded-md border p-3 font-mono text-xs leading-5 text-[var(--ink-dim)]" style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}>{formatJson(model.request_body)}</pre>
             </div>
             <div>
-              <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-[var(--ink-faint)]">响应体</div>
-              <pre className="max-h-48 overflow-auto rounded-lg border p-3 text-xs leading-5 font-mono" style={{ borderColor: 'var(--line)', background: 'var(--bg)', color: 'var(--ink-dim)' }}>{formatJson(model.response_body)}</pre>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">响应体</div>
+              <pre className="max-h-48 overflow-auto rounded-md border p-3 font-mono text-xs leading-5 text-[var(--ink-dim)]" style={{ borderColor: 'var(--line)', background: 'var(--bg)' }}>{formatJson(model.response_body)}</pre>
             </div>
           </div>
         )}
@@ -129,6 +151,8 @@ export default function StationDetailPage() {
   const [station, setStation] = useState<Station | null>(null);
   const [result, setResult] = useState<ProbeResult | null>(null);
   const [deepResult, setDeepResult] = useState<ProbeResult | null>(null);
+  const [probeHistory, setProbeHistory] = useState<BatchSummary[]>([]);
+  const [deepHistory, setDeepHistory] = useState<BatchSummary[]>([]);
   const [resultView, setResultView] = useState<'probe' | 'deep'>('probe');
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogItem[]>([]);
   const [modelSearch, setModelSearch] = useState('');
@@ -140,15 +164,22 @@ export default function StationDetailPage() {
   const [expandedModel, setExpandedModel] = useState<number | null>(null);
 
   const fetchData = useCallback(async () => {
-    try {
-      const [s, r, deep] = await Promise.all([getStation(stationId), getLatestResult(stationId), getLatestDeepResult(stationId)]);
-      setStation(s);
-      setResult(r);
-      setDeepResult(deep);
-    } catch {
-      setStation(await getStation(stationId));
-      setResult(null);
-      setDeepResult(null);
+    const nextStation = await getStation(stationId);
+    const [nextResult, nextDeepResult, nextProbeHistory, nextDeepHistory] = await Promise.all([
+      getLatestResult(stationId).catch(() => null),
+      getLatestDeepResult(stationId).catch(() => null),
+      getStationHistory(stationId, 'probe').catch(() => ({ batches: [], page: 1, page_size: 20 })),
+      getStationHistory(stationId, 'deep').catch(() => ({ batches: [], page: 1, page_size: 20 })),
+    ]);
+
+    setStation(nextStation);
+    setResult(nextResult);
+    setDeepResult(nextDeepResult);
+    setProbeHistory(nextProbeHistory.batches);
+    setDeepHistory(nextDeepHistory.batches);
+
+    if (!nextResult?.batch && nextDeepResult?.batch) {
+      setResultView('deep');
     }
   }, [stationId]);
 
@@ -171,6 +202,12 @@ export default function StationDetailPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchModels(); }, [fetchModels]);
+
+  const activeResult = resultView === 'deep' ? deepResult : result;
+
+  useEffect(() => {
+    setExpandedModel(activeResult?.models[0]?.id ?? null);
+  }, [activeResult]);
 
   const handleProbe = async () => {
     if (modelCatalog.length === 0) {
@@ -212,30 +249,29 @@ export default function StationDetailPage() {
     }
   };
 
-  if (!station) return <div className="flex h-full items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;
+  if (!station) {
+    return <div className="flex h-full items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;
+  }
 
-  const activeResult = resultView === 'deep' ? deepResult : result;
   const hasProbeResult = Boolean(result?.batch);
   const hasDeepResult = Boolean(deepResult?.batch);
-  const ttftData = activeResult?.models?.filter((m) => m.available).map((m) => ({
-    model: m.model_id.split('/').pop() || m.model_id,
-    ttft: m.ttft_ms,
-  })) ?? [];
-  const latestModels = activeResult?.models ?? [];
+  const history = resultView === 'deep' ? deepHistory : probeHistory;
   const normalizedSearch = modelSearch.trim().toLowerCase();
   const filteredCatalog = normalizedSearch
     ? modelCatalog.filter((model) => model.id.toLowerCase().includes(normalizedSearch))
     : modelCatalog;
   const selectedCount = selectedModelIds.size;
   const hasModelCatalog = modelCatalog.length > 0;
+  const isBusy = probing || deepDetectingMode !== null;
   const probeButtonText = probing
     ? '探测中...'
     : hasModelCatalog
-      ? `探测选中 ${selectedCount}`
+      ? `探测 ${selectedCount} 个模型`
       : loadingModels
         ? '获取中...'
         : '获取模型';
-  const isBusy = probing || deepDetectingMode !== null;
+  const latestModels = [...(activeResult?.models ?? [])].sort((a, b) => Number(b.available) - Number(a.available) || a.model_id.localeCompare(b.model_id));
+  const viewTitle = resultView === 'deep' ? '深度检测详情' : '普通探测详情';
 
   const toggleModel = (modelId: string) => {
     setSelectedModelIds((prev) => {
@@ -255,278 +291,274 @@ export default function StationDetailPage() {
   };
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-7 py-4 border-b" style={{ borderColor: 'var(--line)' }}>
-        <div className="flex items-center gap-3">
-          <Link to="/" className="text-[11px] font-mono text-[var(--ink-faint)] transition hover:text-[var(--accent-light)]">看板</Link>
-          <span className="text-[var(--line-soft)]">/</span>
-          <span className="text-[16px] font-bold text-[var(--ink)]">{station.name}</span>
-          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${statusBadge[station.status]}`}>
-            {statusText[station.status]}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-[var(--ink-faint)] mr-2">
-            {station.schedule_enabled ? `每 ${station.schedule_interval_hours}h 探测` : '定时关闭'}
-          </span>
-          <button
-            onClick={handleProbe}
-            disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
-            className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
-            style={{ background: 'var(--accent)', border: 'none' }}
-          >
-            {probeButtonText}
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-7">
-        {/* Station info */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg" style={{ background: 'var(--surface-2)', color: 'var(--accent-light)' }}>
-            {station.name[0].toUpperCase()}
+    <div className="page-shell">
+      <div className="page-inner">
+        <section className="panel hero-band">
+          <div className="min-w-0">
+            <div className="eyebrow">
+              <Link to="/" className="transition hover:text-[var(--accent-light)]">Overview</Link>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h1 className="page-title m-0">{station.name}</h1>
+              <span className={`status-pill ${statusBadge[station.status]}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${statusDot[station.status]}`} />
+                {statusText[station.status]}
+              </span>
+            </div>
+            <p className="mt-3 truncate font-mono text-[12px] text-[var(--ink-faint)]">{station.base_url}</p>
           </div>
-          <div>
-            <div className="font-mono text-[12px] text-[var(--ink-dim)]">{station.base_url}</div>
+          <div className="flex flex-wrap items-center gap-2">
             {station.official_url && (
-              <a href={station.official_url} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-[var(--accent-light)] transition hover:brightness-125">官网 ↗</a>
+              <a href={station.official_url} target="_blank" rel="noreferrer" className="button-ghost">官网</a>
+            )}
+            <span className="rounded-md border px-3 py-2 text-[12px] text-[var(--ink-dim)]" style={{ borderColor: 'var(--line)' }}>
+              {station.schedule_enabled ? `每 ${station.schedule_interval_hours}h 探测` : '定时关闭'}
+            </span>
+          </div>
+        </section>
+
+        <div className="detail-layout">
+          <aside className="sticky-pane space-y-4">
+            <section className="panel overflow-hidden">
+              <div className="border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
+                <div className="eyebrow">Action</div>
+                <h2 className="mt-2 text-[18px] font-bold text-[var(--ink)]">检测范围</h2>
+                <p className="mt-2 text-[12px] leading-6 text-[var(--ink-faint)]">
+                  {hasModelCatalog ? `${selectedCount}/${modelCatalog.length} 个模型已选择` : '先获取模型列表'}
+                </p>
+              </div>
+
+              <div className="space-y-3 p-5">
+                <input
+                  value={modelSearch}
+                  onChange={(e) => setModelSearch(e.target.value)}
+                  className="input-base w-full font-mono text-[11px]"
+                  placeholder="搜索模型"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <button type="button" onClick={fetchModels} disabled={loadingModels || isBusy} className="button-ghost px-0">
+                    {loadingModels ? '获取中' : '刷新'}
+                  </button>
+                  <button type="button" onClick={selectAllModels} disabled={!hasModelCatalog || isBusy} className="button-ghost px-0">全选</button>
+                  <button type="button" onClick={clearModels} disabled={!hasModelCatalog || isBusy} className="button-ghost px-0">清空</button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleProbe}
+                  disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
+                  className="button-primary h-10 w-full"
+                >
+                  {probeButtonText}
+                </button>
+              </div>
+
+              <div className="border-t px-5 py-4" style={{ borderColor: 'var(--line)' }}>
+                <div className="mb-3 text-[12px] font-bold text-[var(--ink)]">深度检测</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['quick', 'standard', 'full'] as DetectionMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => handleDeepDetection(mode)}
+                      disabled={isBusy || loadingModels || !hasModelCatalog || selectedCount === 0}
+                      className="button-ghost px-0"
+                    >
+                      {deepDetectingMode === mode ? '运行中' : detectionModeLabel[mode]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="panel overflow-hidden">
+              <div className="border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
+                <h2 className="section-title">模型列表</h2>
+              </div>
+              {modelLoadError ? (
+                <div className="px-5 py-4 text-[12px] text-[var(--bad-light)]">{modelLoadError}</div>
+              ) : filteredCatalog.length > 0 ? (
+                <div className="max-h-[420px] overflow-y-auto">
+                  {filteredCatalog.map((model) => {
+                    const checked = selectedModelIds.has(model.id);
+                    return (
+                      <label key={model.id} className="data-row cursor-pointer items-start">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleModel(model.id)}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-mono text-[12px] font-semibold text-[var(--ink)]">{model.id}</span>
+                          <span className="mt-1 block truncate font-mono text-[10px] text-[var(--ink-faint)]">{formatPricing(model.pricing)}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-5 py-10 text-center text-[13px] text-[var(--ink-faint)]">
+                  {loadingModels ? '正在获取模型列表...' : '暂无模型'}
+                </div>
+              )}
+            </section>
+          </aside>
+
+          <div className="min-w-0">
+            <section className="panel mb-5 p-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <div className="eyebrow">Result</div>
+                  <h2 className="mt-2 text-[20px] font-black text-[var(--ink)]">{viewTitle}</h2>
+                  <p className="mt-1 text-[12px] text-[var(--ink-faint)]">
+                    {activeResult?.batch ? formatProbeTime(activeResult.batch.probed_at) : '暂无记录'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setResultView('probe')}
+                    disabled={!hasProbeResult}
+                    className={`button-ghost ${resultView === 'probe' ? 'border-[var(--accent)] text-[var(--accent-light)]' : ''}`}
+                  >
+                    普通探测
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResultView('deep')}
+                    disabled={!hasDeepResult}
+                    className={`button-ghost ${resultView === 'deep' ? 'border-[var(--accent)] text-[var(--accent-light)]' : ''}`}
+                  >
+                    深度检测
+                  </button>
+                  {activeResult?.batch && (
+                    <Link to={`/stations/${stationId}/probe/${activeResult.batch.id}`} className="button-primary">查看完整详情</Link>
+                  )}
+                </div>
+              </div>
+
+              {activeResult?.batch && (
+                <div className="mt-5 grid gap-2 sm:grid-cols-4">
+                  <span className="status-pill bg-[var(--ok-dim)] text-[var(--ok-light)]">可用 {activeResult.batch.available_models}</span>
+                  <span className="status-pill bg-[var(--bad-dim)] text-[var(--bad-light)]">不可用 {activeResult.batch.unavailable_models}</span>
+                  <span className="status-pill bg-[var(--surface-2)] text-[var(--ink-dim)]">共 {activeResult.batch.total_models}</span>
+                  <span className="status-pill bg-[var(--accent-dim)] text-[var(--accent-light)]">{activeResult.batch.duration_ms}ms</span>
+                </div>
+              )}
+            </section>
+
+            <section className="panel mb-5 overflow-hidden">
+              <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
+                <div>
+                  <div className="eyebrow">History</div>
+                  <h2 className="mt-1 section-title">探测详情</h2>
+                </div>
+                <span className="font-mono text-[11px] text-[var(--ink-faint)]">{history.length} batches</span>
+              </div>
+              {history.length > 0 ? (
+                <div>
+                  {history.slice(0, 8).map((batch) => (
+                    <Link key={batch.id} to={`/stations/${stationId}/probe/${batch.id}`} className="data-row">
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-mono text-[12px] font-bold text-[var(--ink)]">{batchTypeLabel(batch.batch_type)} #{batch.id}</span>
+                        <span className="mt-1 block font-mono text-[11px] text-[var(--ink-faint)]">{formatProbeTime(batch.probed_at)}</span>
+                      </span>
+                      <span className="hidden text-right text-[12px] text-[var(--ink-dim)] sm:block">
+                        {batch.available_models}/{batch.total_models} 可用
+                        <span className="mt-1 block font-mono text-[11px] text-[var(--ink-faint)]">{batch.duration_ms}ms</span>
+                      </span>
+                      <span className="button-ghost min-h-0 px-3 py-1">详情</span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-5 py-8 text-center text-[13px] text-[var(--ink-faint)]">
+                  暂无{resultView === 'deep' ? '深度检测' : '普通探测'}记录。完成一次检测后，这里会出现可点击的详情记录。
+                </div>
+              )}
+            </section>
+
+            {latestModels.length > 0 ? (
+              <section className="panel overflow-x-auto">
+                <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
+                  <h2 className="section-title">模型结果</h2>
+                  <span className="font-mono text-[11px] text-[var(--ink-faint)]">{latestModels.length} models</span>
+                </div>
+                <table className="w-full min-w-[820px] text-left">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>
+                      <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">模型</th>
+                      <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">状态</th>
+                      <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">TTFT</th>
+                      <th className="px-5 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ink-faint)]">信号</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {latestModels.map((model) => {
+                      const flags = parseFlags(model.degradation_flags);
+                      const capabilities = parseCapabilityFlags(model.degradation_flags);
+                      const attempts = parseAttempts(model.response_body);
+                      const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score, model.available, attempts);
+                      const isExpanded = expandedModel === model.id;
+
+                      return (
+                        <Fragment key={model.id}>
+                          <tr
+                            className="cursor-pointer border-t transition hover:bg-[var(--surface-2)]"
+                            style={{ borderColor: 'var(--line)' }}
+                            onClick={() => setExpandedModel(isExpanded ? null : model.id)}
+                          >
+                            <td className="px-5 py-3 font-mono text-[12px] font-semibold text-[var(--ink)]">{model.model_id}</td>
+                            <td className="px-5 py-3">
+                              <span className={`status-pill ${model.available ? 'bg-[var(--ok-dim)] text-[var(--ok-light)]' : 'bg-[var(--bad-dim)] text-[var(--bad-light)]'}`}>
+                                {model.available ? '可用' : '不可用'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 font-mono text-[12px] text-[var(--ink-dim)]">{model.available ? `${model.ttft_ms}ms` : '-'}</td>
+                            <td className="px-5 py-3">
+                              {flags.length > 0 || capabilities.length > 0 || diagnosticStatus ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {diagnosticStatus && <span className="status-pill bg-[var(--ok-dim)] text-[var(--ok-light)]">{diagnosticStatus}</span>}
+                                  {flags.map((flag) => <span key={flag} className="status-pill bg-[var(--warn-dim)] text-[var(--warn-light)]">{degradationFlagLabel[flag] ?? flag}</span>)}
+                                  {capabilities.map((capability) => <span key={capability} className="status-pill bg-[var(--info-dim)] text-[var(--info-light)]">{capabilityFlagLabel[capability] ?? capability}</span>)}
+                                </div>
+                              ) : (
+                                <span className="text-[12px] text-[var(--ink-faint)]">无异常信号</span>
+                              )}
+                            </td>
+                          </tr>
+                          {model.error_message && (
+                            <tr className="border-t" style={{ borderColor: 'var(--line)' }}>
+                              <td colSpan={4} className="px-5 py-2 text-[12px] text-[var(--bad-light)]">{model.error_message}</td>
+                            </tr>
+                          )}
+                          {isExpanded && (
+                            <tr className="border-t" style={{ borderColor: 'var(--line)' }}>
+                              <ModelExpandRow model={model} />
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </section>
+            ) : (
+              <section className="panel px-6 py-16 text-center">
+                <h2 className="text-[16px] font-bold text-[var(--ink)]">还没有{resultView === 'deep' ? '深度检测' : '普通探测'}记录</h2>
+                <p className="mt-2 text-[13px] text-[var(--ink-faint)]">选择模型后运行一次检测，结果会显示在这里。</p>
+                <button
+                  type="button"
+                  onClick={handleProbe}
+                  disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
+                  className="button-primary mt-5"
+                >
+                  {probeButtonText}
+                </button>
+              </section>
             )}
           </div>
         </div>
-
-        <div className="panel mb-6 overflow-hidden">
-          <div className="flex flex-wrap items-center gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--line)' }}>
-            <div>
-              <div className="text-[12px] font-semibold text-[var(--ink)]">模型选择</div>
-              <div className="mt-0.5 text-[10px] font-mono text-[var(--ink-faint)]">
-                {hasModelCatalog ? `${selectedCount}/${modelCatalog.length} selected` : '先获取模型列表'}
-              </div>
-            </div>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <input
-                value={modelSearch}
-                onChange={(e) => setModelSearch(e.target.value)}
-                className="input-base h-8 w-56 font-mono text-[11px]"
-                placeholder="搜索模型"
-              />
-              <button
-                onClick={fetchModels}
-                disabled={loadingModels || isBusy}
-                className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
-                style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
-              >
-                {loadingModels ? '获取中...' : '刷新'}
-              </button>
-              <button
-                onClick={selectAllModels}
-                disabled={!hasModelCatalog || isBusy}
-                className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
-                style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
-              >
-                全选
-              </button>
-              <button
-                onClick={clearModels}
-                disabled={!hasModelCatalog || isBusy}
-                className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
-                style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
-              >
-                清空
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--line)' }}>
-            <div className="min-w-40">
-              <div className="text-[12px] font-semibold text-[var(--ink)]">Veridrop 深度检测</div>
-              <div className="mt-0.5 text-[10px] font-mono text-[var(--ink-faint)]">针对已选模型运行真伪/能力/协议检测</div>
-            </div>
-            <div className="ml-auto flex flex-wrap gap-2">
-              {(['quick', 'standard', 'full'] as DetectionMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => handleDeepDetection(mode)}
-                  disabled={isBusy || loadingModels || !hasModelCatalog || selectedCount === 0}
-                  className="h-8 rounded-lg border px-3 text-[11px] font-semibold transition hover:border-[var(--accent)] hover:text-[var(--accent-light)] disabled:opacity-50"
-                  style={{ borderColor: 'var(--line-soft)', color: 'var(--ink-dim)', background: 'transparent' }}
-                >
-                  {deepDetectingMode === mode ? `${detectionModeLabel[mode]}检测中...` : `${detectionModeLabel[mode]}检测`}
-                </button>
-              ))}
-            </div>
-          </div>
-          {modelLoadError ? (
-            <div className="px-5 py-4 text-[12px] text-[var(--bad-light)]">{modelLoadError}</div>
-          ) : filteredCatalog.length > 0 ? (
-            <div className="max-h-[320px] overflow-y-auto">
-              {filteredCatalog.map((model) => {
-                const checked = selectedModelIds.has(model.id);
-                return (
-                  <label
-                    key={model.id}
-                    className="flex items-center gap-3 border-b px-5 py-3 transition hover:bg-[var(--surface-2)]"
-                    style={{ borderColor: 'var(--line)' }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleModel(model.id)}
-                      className="h-4 w-4 shrink-0 accent-[var(--accent)]"
-                    />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-medium text-[var(--ink)]">{model.id}</span>
-                    <span className="max-w-[360px] truncate font-mono text-[10px] text-[var(--ink-faint)]">{formatPricing(model.pricing)}</span>
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="px-5 py-8 text-center text-[12px] text-[var(--ink-faint)]">
-              {loadingModels ? '正在获取模型列表...' : '暂无模型'}
-            </div>
-          )}
-        </div>
-
-        {(hasProbeResult || hasDeepResult) && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              onClick={() => setResultView('probe')}
-              disabled={!hasProbeResult}
-              className={`h-8 rounded-lg border px-3 text-[11px] font-semibold transition disabled:opacity-40 ${resultView === 'probe' ? 'text-[var(--accent-light)]' : 'text-[var(--ink-dim)]'}`}
-              style={{ borderColor: resultView === 'probe' ? 'var(--accent)' : 'var(--line-soft)', background: 'transparent' }}
-            >
-              普通探测
-            </button>
-            <button
-              onClick={() => setResultView('deep')}
-              disabled={!hasDeepResult}
-              className={`h-8 rounded-lg border px-3 text-[11px] font-semibold transition disabled:opacity-40 ${resultView === 'deep' ? 'text-[var(--accent-light)]' : 'text-[var(--ink-dim)]'}`}
-              style={{ borderColor: resultView === 'deep' ? 'var(--accent)' : 'var(--line-soft)', background: 'transparent' }}
-            >
-              深度检测
-            </button>
-          </div>
-        )}
-
-        {/* Stats */}
-        {activeResult?.batch && (
-          <>
-            <p className="mb-3 text-[12px] font-mono text-[var(--ink-faint)]">
-              检测时间：{formatProbeTime(activeResult.batch.probed_at)}
-            </p>
-            <div className="grid grid-cols-4 gap-3 mb-6">
-              {[
-                { label: '模型总数', value: activeResult.batch.total_models, color: 'var(--ink)' },
-                { label: '可用', value: activeResult.batch.available_models, color: 'var(--ok-light)' },
-                { label: '不可用', value: activeResult.batch.unavailable_models, color: 'var(--bad-light)' },
-                { label: '耗时', value: `${activeResult.batch.duration_ms}ms`, color: 'var(--accent-light)' },
-              ].map((item) => (
-                <div key={item.label} className="panel p-5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--ink-faint)' }}>{item.label}</div>
-                  <div className="text-[24px] font-extrabold tabular-nums tracking-tight" style={{ color: item.color }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* TTFT Chart */}
-        {ttftData.length > 1 && (
-          <div className="panel mb-6">
-            <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: 'var(--line)' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
-              <span className="text-[12px] font-semibold text-[var(--ink)]">TTFT 分布</span>
-            </div>
-            <div className="h-[280px] p-5">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={ttftData}>
-                  <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="model" tick={{ fontSize: 10, fill: 'var(--ink-faint)' }} angle={-18} textAnchor="end" height={58} stroke="var(--chart-grid)" />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--ink-faint)' }} stroke="var(--chart-grid)" />
-                  <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--chart-grid)' }} />
-                  <Line type="monotone" dataKey="ttft" stroke="var(--accent-light)" strokeWidth={2} dot={{ r: 3, fill: 'var(--accent-light)' }} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* Model Table */}
-        {latestModels.length > 0 ? (
-          <div className="panel overflow-x-auto">
-            <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: 'var(--line)' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--ok-light)]" />
-              <span className="text-[12px] font-semibold text-[var(--ink)]">{resultView === 'deep' ? '深度检测结果' : '模型结果'}</span>
-              <span className="text-[10px] font-mono text-[var(--ink-faint)] ml-auto">{latestModels.length} models</span>
-            </div>
-            <table className="w-full min-w-[820px] text-left text-sm">
-              <thead style={{ background: 'var(--surface-2)' }}>
-                <tr>
-                  <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-faint)]">模型</th>
-                  <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-faint)]">状态</th>
-                  <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-faint)]">TTFT</th>
-                  <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-faint)]">响应预览</th>
-                  <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-faint)]">错误</th>
-                  <th className="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-faint)]">标签</th>
-                </tr>
-              </thead>
-              <tbody>
-                {latestModels.map((model) => {
-                  const flags = parseFlags(model.degradation_flags);
-                  const capabilities = parseCapabilityFlags(model.degradation_flags);
-                  const attempts = parseAttempts(model.response_body);
-                  const diagnosticStatus = diagnosticStatusLabel(flags, model.authenticity_score, model.available, attempts);
-                  const isExpanded = expandedModel === model.id;
-
-                  return (
-                    <Fragment key={model.id}>
-                      <tr
-                        className="border-t transition hover:bg-[var(--surface)] cursor-pointer"
-                        style={{ borderColor: 'var(--line)' }}
-                        onClick={() => setExpandedModel(isExpanded ? null : model.id)}
-                      >
-                        <td className="px-5 py-3 font-mono text-[11px] text-[var(--ink)] font-medium">{model.model_id}</td>
-                        <td className="px-5 py-3">
-                          <span className={`inline-flex min-w-14 justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${model.available ? 'bg-[var(--ok-dim)] text-[var(--ok-light)]' : 'bg-[var(--bad-dim)] text-[var(--bad-light)]'}`}>
-                            {model.available ? '可用' : '不可用'}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 font-mono text-[11px] text-[var(--ink-dim)]">{model.available ? `${model.ttft_ms}ms` : '—'}</td>
-                        <td className="max-w-52 px-5 py-3 text-[11px] text-[var(--ink-faint)] truncate">{model.response_preview || '—'}</td>
-                        <td className="max-w-52 px-5 py-3 text-[11px] text-[var(--bad-light)] truncate">{model.error_message || '—'}</td>
-                        <td className="px-5 py-3">
-                          {flags.length > 0 || capabilities.length > 0 || diagnosticStatus ? (
-                            <div className="flex flex-wrap gap-1">
-                              {diagnosticStatus && <span className="inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-semibold bg-[var(--ok-dim)] text-[var(--ok-light)]">{diagnosticStatus}</span>}
-                              {flags.map((f) => <span key={f} className="inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-semibold bg-[var(--warn-dim)] text-[var(--warn-light)]">{degradationFlagLabel[f] ?? f}</span>)}
-                              {capabilities.map((c) => <span key={c} className="inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-semibold bg-[var(--info-dim)] text-[var(--info-light)]">{capabilityFlagLabel[c] ?? c}</span>)}
-                            </div>
-                          ) : <span className="text-[11px] text-[var(--ink-faint)]">—</span>}
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="border-t" style={{ borderColor: 'var(--line)' }}>
-                          <ModelExpandRow model={model} />
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="panel p-14 text-center">
-            <p className="text-[13px] text-[var(--ink-faint)] mb-3">{resultView === 'deep' ? '还没有深度检测记录' : '还没有探测记录'}</p>
-            <button
-              onClick={handleProbe}
-              disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
-              className="px-4 py-2 rounded-lg text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
-              style={{ background: 'var(--accent)', border: 'none' }}
-            >
-              {probeButtonText}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

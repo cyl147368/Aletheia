@@ -1,8 +1,8 @@
 import api from './client';
-import type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing } from './types';
+import type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing, BatchSummary, StationHistoryResult } from './types';
 
 // Re-export types for pages
-export type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing };
+export type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing, BatchSummary, StationHistoryResult };
 
 export async function login(password: string): Promise<string> {
   const { data } = await api.post('/auth/login', { password });
@@ -86,6 +86,11 @@ export async function getLatestResult(stationId: number): Promise<ProbeResult> {
 
 export async function getLatestDeepResult(stationId: number): Promise<ProbeResult> {
   const { data } = await api.get(`/stations/${stationId}/history/latest/deep`);
+  return data;
+}
+
+export async function getStationHistory(stationId: number, batchType: 'probe' | 'deep' = 'probe'): Promise<StationHistoryResult> {
+  const { data } = await api.get(`/stations/${stationId}/history`, { params: { batch_type: batchType } });
   return data;
 }
 

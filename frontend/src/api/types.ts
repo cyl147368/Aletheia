@@ -23,6 +23,12 @@ export interface BatchSummary {
   batch_type: 'probe' | 'deep';
 }
 
+export interface StationHistoryResult {
+  batches: BatchSummary[];
+  page: number;
+  page_size: number;
+}
+
 export interface ModelResult {
   id: number;
   model_id: string;
