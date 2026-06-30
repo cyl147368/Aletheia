@@ -66,6 +66,7 @@ export async function triggerProbe(stationId: number, modelIds?: string[], mode?
   available_models: number;
   unavailable_models: number;
   duration_ms: number;
+  batch_type: 'probe' | 'deep';
   error?: string;
 }> {
   const body = modelIds || mode ? { model_ids: modelIds, mode } : undefined;
@@ -80,6 +81,11 @@ export async function getStationModels(stationId: number): Promise<ModelCatalogR
 
 export async function getLatestResult(stationId: number): Promise<ProbeResult> {
   const { data } = await api.get(`/stations/${stationId}/history/latest`);
+  return data;
+}
+
+export async function getLatestDeepResult(stationId: number): Promise<ProbeResult> {
+  const { data } = await api.get(`/stations/${stationId}/history/latest/deep`);
   return data;
 }
 

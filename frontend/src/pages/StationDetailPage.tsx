@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getLatestResult, getStation, getStationModels, triggerProbe, type DetectionMode, type ModelCatalogItem, type ModelPricing, type ProbeResult, type Station } from '../api';
+import { getLatestDeepResult, getLatestResult, getStation, getStationModels, triggerProbe, type DetectionMode, type ModelCatalogItem, type ModelPricing, type ProbeResult, type Station } from '../api';
 import { VeridropReportPanel } from '../components/VeridropReportPanel';
 import {
   capabilityFlagLabel,
@@ -128,6 +128,8 @@ export default function StationDetailPage() {
   const stationId = Number(id);
   const [station, setStation] = useState<Station | null>(null);
   const [result, setResult] = useState<ProbeResult | null>(null);
+  const [deepResult, setDeepResult] = useState<ProbeResult | null>(null);
+  const [resultView, setResultView] = useState<'probe' | 'deep'>('probe');
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogItem[]>([]);
   const [modelSearch, setModelSearch] = useState('');
   const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(new Set());
@@ -139,12 +141,14 @@ export default function StationDetailPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [s, r] = await Promise.all([getStation(stationId), getLatestResult(stationId)]);
+      const [s, r, deep] = await Promise.all([getStation(stationId), getLatestResult(stationId), getLatestDeepResult(stationId)]);
       setStation(s);
       setResult(r);
+      setDeepResult(deep);
     } catch {
       setStation(await getStation(stationId));
       setResult(null);
+      setDeepResult(null);
     }
   }, [stationId]);
 
@@ -182,6 +186,7 @@ export default function StationDetailPage() {
     try {
       await triggerProbe(stationId, modelIds);
       await fetchData();
+      setResultView('probe');
     } finally {
       setProbing(false);
     }
@@ -201,6 +206,7 @@ export default function StationDetailPage() {
     try {
       await triggerProbe(stationId, modelIds, mode);
       await fetchData();
+      setResultView('deep');
     } finally {
       setDeepDetectingMode(null);
     }
@@ -208,11 +214,14 @@ export default function StationDetailPage() {
 
   if (!station) return <div className="flex h-full items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;
 
-  const ttftData = result?.models?.filter((m) => m.available).map((m) => ({
+  const activeResult = resultView === 'deep' ? deepResult : result;
+  const hasProbeResult = Boolean(result?.batch);
+  const hasDeepResult = Boolean(deepResult?.batch);
+  const ttftData = activeResult?.models?.filter((m) => m.available).map((m) => ({
     model: m.model_id.split('/').pop() || m.model_id,
     ttft: m.ttft_ms,
   })) ?? [];
-  const latestModels = result?.models ?? [];
+  const latestModels = activeResult?.models ?? [];
   const normalizedSearch = modelSearch.trim().toLowerCase();
   const filteredCatalog = normalizedSearch
     ? modelCatalog.filter((model) => model.id.toLowerCase().includes(normalizedSearch))
@@ -377,18 +386,39 @@ export default function StationDetailPage() {
           )}
         </div>
 
+        {(hasProbeResult || hasDeepResult) && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setResultView('probe')}
+              disabled={!hasProbeResult}
+              className={`h-8 rounded-lg border px-3 text-[11px] font-semibold transition disabled:opacity-40 ${resultView === 'probe' ? 'text-[var(--accent-light)]' : 'text-[var(--ink-dim)]'}`}
+              style={{ borderColor: resultView === 'probe' ? 'var(--accent)' : 'var(--line-soft)', background: 'transparent' }}
+            >
+              普通探测
+            </button>
+            <button
+              onClick={() => setResultView('deep')}
+              disabled={!hasDeepResult}
+              className={`h-8 rounded-lg border px-3 text-[11px] font-semibold transition disabled:opacity-40 ${resultView === 'deep' ? 'text-[var(--accent-light)]' : 'text-[var(--ink-dim)]'}`}
+              style={{ borderColor: resultView === 'deep' ? 'var(--accent)' : 'var(--line-soft)', background: 'transparent' }}
+            >
+              深度检测
+            </button>
+          </div>
+        )}
+
         {/* Stats */}
-        {result?.batch && (
+        {activeResult?.batch && (
           <>
             <p className="mb-3 text-[12px] font-mono text-[var(--ink-faint)]">
-              检测时间：{formatProbeTime(result.batch.probed_at)}
+              检测时间：{formatProbeTime(activeResult.batch.probed_at)}
             </p>
             <div className="grid grid-cols-4 gap-3 mb-6">
               {[
-                { label: '模型总数', value: result.batch.total_models, color: 'var(--ink)' },
-                { label: '可用', value: result.batch.available_models, color: 'var(--ok-light)' },
-                { label: '不可用', value: result.batch.unavailable_models, color: 'var(--bad-light)' },
-                { label: '耗时', value: `${result.batch.duration_ms}ms`, color: 'var(--accent-light)' },
+                { label: '模型总数', value: activeResult.batch.total_models, color: 'var(--ink)' },
+                { label: '可用', value: activeResult.batch.available_models, color: 'var(--ok-light)' },
+                { label: '不可用', value: activeResult.batch.unavailable_models, color: 'var(--bad-light)' },
+                { label: '耗时', value: `${activeResult.batch.duration_ms}ms`, color: 'var(--accent-light)' },
               ].map((item) => (
                 <div key={item.label} className="panel p-5">
                   <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--ink-faint)' }}>{item.label}</div>
@@ -425,7 +455,7 @@ export default function StationDetailPage() {
           <div className="panel overflow-x-auto">
             <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: 'var(--line)' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--ok-light)]" />
-              <span className="text-[12px] font-semibold text-[var(--ink)]">模型结果</span>
+              <span className="text-[12px] font-semibold text-[var(--ink)]">{resultView === 'deep' ? '深度检测结果' : '模型结果'}</span>
               <span className="text-[10px] font-mono text-[var(--ink-faint)] ml-auto">{latestModels.length} models</span>
             </div>
             <table className="w-full min-w-[820px] text-left text-sm">
@@ -486,7 +516,7 @@ export default function StationDetailPage() {
           </div>
         ) : (
           <div className="panel p-14 text-center">
-            <p className="text-[13px] text-[var(--ink-faint)] mb-3">还没有探测记录</p>
+            <p className="text-[13px] text-[var(--ink-faint)] mb-3">{resultView === 'deep' ? '还没有深度检测记录' : '还没有探测记录'}</p>
             <button
               onClick={handleProbe}
               disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}

@@ -35,6 +35,7 @@ class ProbeBatch(Base):
     unavailable_models = Column(Integer, default=0)
     models_json = Column(Text, nullable=True)
     duration_ms = Column(Integer, default=0)
+    batch_type = Column(Text, default="probe")
 
     station = relationship("RelayStation", back_populates="probe_batches")
     model_results = relationship("ModelResult", back_populates="batch", cascade="all, delete-orphan")

@@ -17,6 +17,10 @@ async def init_db(database_url: str):
         column_names = {row[1] for row in columns.fetchall()}
         if "official_url" not in column_names:
             await conn.execute(text("ALTER TABLE relay_stations ADD COLUMN official_url TEXT"))
+        columns = await conn.execute(text("PRAGMA table_info(probe_batches)"))
+        batch_column_names = {row[1] for row in columns.fetchall()}
+        if "batch_type" not in batch_column_names:
+            await conn.execute(text("ALTER TABLE probe_batches ADD COLUMN batch_type TEXT DEFAULT 'probe'"))
 
 
 async def get_db():

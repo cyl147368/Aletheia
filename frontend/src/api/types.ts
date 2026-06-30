@@ -20,6 +20,7 @@ export interface BatchSummary {
   available_models: number;
   unavailable_models: number;
   duration_ms: number;
+  batch_type: 'probe' | 'deep';
 }
 
 export interface ModelResult {
