@@ -161,25 +161,36 @@ export default function StationDetailPage() {
   const [modelLoadError, setModelLoadError] = useState('');
   const [probing, setProbing] = useState(false);
   const [deepDetectingMode, setDeepDetectingMode] = useState<DetectionMode | null>(null);
+  const [loadingResults, setLoadingResults] = useState(false);
   const [expandedModel, setExpandedModel] = useState<number | null>(null);
 
-  const fetchData = useCallback(async () => {
-    const nextStation = await getStation(stationId);
-    const [nextResult, nextDeepResult, nextProbeHistory, nextDeepHistory] = await Promise.all([
-      getLatestResult(stationId).catch(() => null),
-      getLatestDeepResult(stationId).catch(() => null),
-      getStationHistory(stationId, 'probe').catch(() => ({ batches: [], page: 1, page_size: 20 })),
-      getStationHistory(stationId, 'deep').catch(() => ({ batches: [], page: 1, page_size: 20 })),
-    ]);
+  const fetchData = useCallback(async (isStale: () => boolean = () => false) => {
+    try {
+      const nextStation = await getStation(stationId);
+      if (isStale()) return;
+      setStation(nextStation);
+      setLoadingResults(true);
 
-    setStation(nextStation);
-    setResult(nextResult);
-    setDeepResult(nextDeepResult);
-    setProbeHistory(nextProbeHistory.batches);
-    setDeepHistory(nextDeepHistory.batches);
+      const [nextResult, nextDeepResult, nextProbeHistory, nextDeepHistory] = await Promise.all([
+        getLatestResult(stationId).catch(() => null),
+        getLatestDeepResult(stationId).catch(() => null),
+        getStationHistory(stationId, 'probe').catch(() => ({ batches: [], page: 1, page_size: 20 })),
+        getStationHistory(stationId, 'deep').catch(() => ({ batches: [], page: 1, page_size: 20 })),
+      ]);
+      if (isStale()) return;
 
-    if (!nextResult?.batch && nextDeepResult?.batch) {
-      setResultView('deep');
+      setResult(nextResult);
+      setDeepResult(nextDeepResult);
+      setProbeHistory(nextProbeHistory.batches);
+      setDeepHistory(nextDeepHistory.batches);
+
+      if (!nextResult?.batch && nextDeepResult?.batch) {
+        setResultView('deep');
+      }
+    } finally {
+      if (!isStale()) {
+        setLoadingResults(false);
+      }
     }
   }, [stationId]);
 
@@ -200,8 +211,11 @@ export default function StationDetailPage() {
     }
   }, [stationId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { fetchModels(); }, [fetchModels]);
+  useEffect(() => {
+    let ignore = false;
+    fetchData(() => ignore);
+    return () => { ignore = true; };
+  }, [fetchData]);
 
   const activeResult = resultView === 'deep' ? deepResult : result;
 
@@ -211,7 +225,7 @@ export default function StationDetailPage() {
 
   const handleProbe = async () => {
     if (modelCatalog.length === 0) {
-      await fetchModels();
+      alert('请先点击「获取模型」手动读取模型列表');
       return;
     }
     const modelIds = Array.from(selectedModelIds);
@@ -231,7 +245,7 @@ export default function StationDetailPage() {
 
   const handleDeepDetection = async (mode: DetectionMode) => {
     if (modelCatalog.length === 0) {
-      await fetchModels();
+      alert('请先点击「获取模型」手动读取模型列表');
       return;
     }
     const modelIds = Array.from(selectedModelIds);
@@ -324,7 +338,7 @@ export default function StationDetailPage() {
                 <div className="eyebrow">Action</div>
                 <h2 className="mt-2 text-[18px] font-bold text-[var(--ink)]">检测范围</h2>
                 <p className="mt-2 text-[12px] leading-6 text-[var(--ink-faint)]">
-                  {hasModelCatalog ? `${selectedCount}/${modelCatalog.length} 个模型已选择` : '先获取模型列表'}
+                  {hasModelCatalog ? `${selectedCount}/${modelCatalog.length} 个模型已选择` : '页面进入仅展示历史；获取模型需手动点击'}
                 </p>
               </div>
 
@@ -334,10 +348,11 @@ export default function StationDetailPage() {
                   onChange={(e) => setModelSearch(e.target.value)}
                   className="input-base w-full font-mono text-[11px]"
                   placeholder="搜索模型"
+                  disabled={!hasModelCatalog}
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <button type="button" onClick={fetchModels} disabled={loadingModels || isBusy} className="button-ghost px-0">
-                    {loadingModels ? '获取中' : '刷新'}
+                    {loadingModels ? '获取中' : hasModelCatalog ? '刷新模型' : '获取模型'}
                   </button>
                   <button type="button" onClick={selectAllModels} disabled={!hasModelCatalog || isBusy} className="button-ghost px-0">全选</button>
                   <button type="button" onClick={clearModels} disabled={!hasModelCatalog || isBusy} className="button-ghost px-0">清空</button>
@@ -398,7 +413,7 @@ export default function StationDetailPage() {
                 </div>
               ) : (
                 <div className="px-5 py-10 text-center text-[13px] text-[var(--ink-faint)]">
-                  {loadingModels ? '正在获取模型列表...' : '暂无模型'}
+                  {loadingModels ? '正在获取模型列表...' : '点击「获取模型」后才会访问渠道模型接口。'}
                 </div>
               )}
             </section>
@@ -411,7 +426,7 @@ export default function StationDetailPage() {
                   <div className="eyebrow">Result</div>
                   <h2 className="mt-2 text-[20px] font-black text-[var(--ink)]">{viewTitle}</h2>
                   <p className="mt-1 text-[12px] text-[var(--ink-faint)]">
-                    {activeResult?.batch ? formatProbeTime(activeResult.batch.probed_at) : '暂无记录'}
+                    {activeResult?.batch ? formatProbeTime(activeResult.batch.probed_at) : loadingResults ? '正在读取检测记录...' : '暂无记录'}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -453,7 +468,7 @@ export default function StationDetailPage() {
                   <div className="eyebrow">History</div>
                   <h2 className="mt-1 section-title">探测详情</h2>
                 </div>
-                <span className="font-mono text-[11px] text-[var(--ink-faint)]">{history.length} batches</span>
+                <span className="font-mono text-[11px] text-[var(--ink-faint)]">{loadingResults ? 'updating' : `${history.length} batches`}</span>
               </div>
               {history.length > 0 ? (
                 <div>
@@ -473,7 +488,7 @@ export default function StationDetailPage() {
                 </div>
               ) : (
                 <div className="px-5 py-8 text-center text-[13px] text-[var(--ink-faint)]">
-                  暂无{resultView === 'deep' ? '深度检测' : '普通探测'}记录。完成一次检测后，这里会出现可点击的详情记录。
+                  {loadingResults ? '正在读取历史记录...' : `暂无${resultView === 'deep' ? '深度检测' : '普通探测'}记录。完成一次检测后，这里会出现可点击的详情记录。`}
                 </div>
               )}
             </section>
@@ -545,8 +560,8 @@ export default function StationDetailPage() {
               </section>
             ) : (
               <section className="panel px-6 py-16 text-center">
-                <h2 className="text-[16px] font-bold text-[var(--ink)]">还没有{resultView === 'deep' ? '深度检测' : '普通探测'}记录</h2>
-                <p className="mt-2 text-[13px] text-[var(--ink-faint)]">选择模型后运行一次检测，结果会显示在这里。</p>
+                <h2 className="text-[16px] font-bold text-[var(--ink)]">{loadingResults ? '正在读取模型结果' : `还没有${resultView === 'deep' ? '深度检测' : '普通探测'}记录`}</h2>
+                <p className="mt-2 text-[13px] text-[var(--ink-faint)]">{loadingResults ? '结果加载完成后会直接显示在这里。' : '选择模型后运行一次检测，结果会显示在这里。'}</p>
                 <button
                   type="button"
                   onClick={handleProbe}

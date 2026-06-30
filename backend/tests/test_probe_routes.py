@@ -41,6 +41,28 @@ class ProbeRouteBatchTypeTest(unittest.TestCase):
         self.assertIn('ProbeBatch.batch_type == "deep"', deep_source)
         self.assertIn('/stations/{station_id}/history/latest/deep', self.source)
 
+    def test_latest_results_support_summary_mode(self):
+        latest_result = self._function("latest_result")
+        latest_deep_result = self._function("latest_deep_result")
+
+        for fn in (latest_result, latest_deep_result):
+            arg_names = [arg.arg for arg in fn.args.args]
+            source = ast.get_source_segment(self.source, fn)
+
+            self.assertIn("summary", arg_names)
+            self.assertIn("select(ModelResult.id, ModelResult.model_id, ModelResult.available, ModelResult.ttft_ms)", source)
+            self.assertIn("None if summary else m.request_body", source)
+            self.assertIn("None if summary else m.response_body", source)
+
+    def test_batch_detail_returns_full_payloads(self):
+        batch_detail = self._function("batch_detail")
+        source = ast.get_source_segment(self.source, batch_detail)
+
+        self.assertNotIn("summary", [arg.arg for arg in batch_detail.args.args])
+        self.assertIn('"request_body": m.request_body', source)
+        self.assertIn('"response_body": m.response_body', source)
+        self.assertNotIn("None if summary else", source)
+
 
 if __name__ == "__main__":
     unittest.main()

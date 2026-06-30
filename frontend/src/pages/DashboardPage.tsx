@@ -112,34 +112,54 @@ function healthLabel(stations: Station[]) {
 export default function DashboardPage() {
   const [stations, setStations] = useState<Station[]>([]);
   const [results, setResults] = useState<Record<number, ProbeResult | null>>({});
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshingResults, setRefreshingResults] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (isStale: () => boolean = () => false) => {
+    setRefreshingResults(true);
     try {
       const nextStations = await listStations();
-      const nextResults: Record<number, ProbeResult | null> = {};
-
-      await Promise.all(nextStations.map(async (station) => {
-        try {
-          nextResults[station.id] = await getLatestResult(station.id);
-        } catch {
-          nextResults[station.id] = null;
-        }
-      }));
+      if (isStale()) return;
 
       setStations(nextStations);
-      setResults(nextResults);
+      setInitialLoading(false);
+      setResults((prev) => {
+        const nextResults: Record<number, ProbeResult | null> = {};
+        for (const station of nextStations) {
+          nextResults[station.id] = prev[station.id] ?? null;
+        }
+        return nextResults;
+      });
+
+      await Promise.all(nextStations.map(async (station) => {
+        let nextResult: ProbeResult | null = null;
+        try {
+          nextResult = await getLatestResult(station.id, true);
+        } catch {
+          nextResult = null;
+        }
+        if (!isStale()) {
+          setResults((prev) => ({ ...prev, [station.id]: nextResult }));
+        }
+      }));
+    } catch {
+      if (!isStale()) {
+        setStations([]);
+        setResults({});
+      }
     } finally {
-      setLoading(false);
+      if (!isStale()) {
+        setInitialLoading(false);
+        setRefreshingResults(false);
+      }
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  if (loading) {
-    return <div className="flex min-h-[60vh] items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;
-  }
+  useEffect(() => {
+    let ignore = false;
+    fetchData(() => ignore);
+    return () => { ignore = true; };
+  }, [fetchData]);
 
   const availableModelGroups = buildAvailableModelGroups(stations, results);
   const routeCount = availableModelGroups.reduce((sum, group) => sum + group.stations.length, 0);
@@ -151,6 +171,7 @@ export default function DashboardPage() {
     return (b.last_probe_at ? new Date(b.last_probe_at).getTime() : 0) - (a.last_probe_at ? new Date(a.last_probe_at).getTime() : 0);
   });
   const health = healthLabel(stations);
+  const loadingResults = refreshingResults && stations.length > 0;
 
   return (
     <div className="page-shell">
@@ -171,15 +192,15 @@ export default function DashboardPage() {
 
           <div className="route-scoreboard">
             <div className="route-score">
-              <span className="route-score-value">{availableModelGroups.length}</span>
+              <span className="route-score-value">{initialLoading ? '...' : availableModelGroups.length}</span>
               <span className="route-score-label">可用模型</span>
             </div>
             <div className="route-score">
-              <span className="route-score-value">{routeCount}</span>
+              <span className="route-score-value">{initialLoading ? '...' : routeCount}</span>
               <span className="route-score-label">可用渠道</span>
             </div>
             <div className="route-score">
-              <span className="route-score-value">{stations.length}</span>
+              <span className="route-score-value">{initialLoading ? '...' : stations.length}</span>
               <span className="route-score-label">站点</span>
             </div>
           </div>
@@ -190,7 +211,9 @@ export default function DashboardPage() {
             <span className={`h-1.5 w-1.5 rounded-full ${health.config.dot}`} />
             {health.label}
           </span>
-          <span className="text-[12px] text-[var(--ink-faint)]">模型可用率 {availableModels}/{totalModels || 0}</span>
+          <span className="text-[12px] text-[var(--ink-faint)]">
+            {loadingResults ? '模型可用率更新中...' : `模型可用率 ${availableModels}/${totalModels || 0}`}
+          </span>
           {(['ok', 'degraded', 'down', 'unknown'] as Station['status'][]).map((status) => {
             const config = statusConfig[status];
             const count = stations.filter((station) => station.status === status).length;
@@ -200,7 +223,9 @@ export default function DashboardPage() {
               </span>
             );
           })}
-          <button type="button" onClick={fetchData} className="button-ghost ml-auto">刷新</button>
+          <button type="button" onClick={() => fetchData()} disabled={refreshingResults} className="button-ghost ml-auto">
+            {refreshingResults ? '刷新中' : '刷新'}
+          </button>
           <Link to="/manage" className="button-ghost">管理站点</Link>
         </section>
 
@@ -214,13 +239,20 @@ export default function DashboardPage() {
               <span className="font-mono text-[11px] text-[var(--ink-faint)]">{availableModelGroups.length} models · {routeCount} routes</span>
             </div>
 
-            {availableModelGroups.length === 0 ? (
+            {initialLoading ? (
               <div className="route-empty">
-                <h3 className="text-[17px] font-bold text-[var(--ink)]">暂无可用模型数据</h3>
+                <h3 className="text-[17px] font-bold text-[var(--ink)]">正在加载站点</h3>
                 <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--ink-faint)]">
-                  完成一次站点探测后，这里会直接展示模型、来源渠道和 TTFT。
+                  先读取站点列表，随后逐步填充模型和渠道结果。
                 </p>
-                <Link to="/manage" className="button-primary mt-5">添加或检查站点</Link>
+              </div>
+            ) : availableModelGroups.length === 0 ? (
+              <div className="route-empty">
+                <h3 className="text-[17px] font-bold text-[var(--ink)]">{loadingResults ? '正在读取模型和渠道' : '暂无可用模型数据'}</h3>
+                <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--ink-faint)]">
+                  {loadingResults ? '最新探测结果会按站点逐步出现。' : '完成一次站点探测后，这里会直接展示模型、来源渠道和 TTFT。'}
+                </p>
+                {!loadingResults && <Link to="/manage" className="button-primary mt-5">添加或检查站点</Link>}
               </div>
             ) : (
               <div className="route-model-list">
@@ -288,7 +320,7 @@ export default function DashboardPage() {
                           <span className="mt-1 block truncate font-mono text-[10px] text-[var(--ink-faint)]">{station.base_url}</span>
                         </span>
                         <span className="text-right font-mono text-[11px] text-[var(--ink-dim)]">
-                          {batch ? `${batch.available_models}/${batch.total_models}` : '-'}
+                          {batch ? `${batch.available_models}/${batch.total_models}` : loadingResults ? '...' : '-'}
                         </span>
                       </Link>
                     );

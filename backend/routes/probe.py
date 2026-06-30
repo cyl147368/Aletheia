@@ -227,6 +227,7 @@ async def station_history(
 @router.get("/stations/{station_id}/history/latest")
 async def latest_result(
     station_id: int,
+    summary: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     s = await db.get(RelayStation, station_id)
@@ -244,8 +245,16 @@ async def latest_result(
     if not batch:
         return {"batch": None, "models": []}
 
-    models_q = select(ModelResult).where(ModelResult.batch_id == batch.id).order_by(ModelResult.model_id)
-    models = (await db.execute(models_q)).scalars().all()
+    if summary:
+        models_q = (
+            select(ModelResult.id, ModelResult.model_id, ModelResult.available, ModelResult.ttft_ms)
+            .where(ModelResult.batch_id == batch.id)
+            .order_by(ModelResult.model_id)
+        )
+        models = (await db.execute(models_q)).all()
+    else:
+        models_q = select(ModelResult).where(ModelResult.batch_id == batch.id).order_by(ModelResult.model_id)
+        models = (await db.execute(models_q)).scalars().all()
 
     return {
         "batch": {
@@ -263,12 +272,12 @@ async def latest_result(
                 "model_id": m.model_id,
                 "available": bool(m.available),
                 "ttft_ms": m.ttft_ms,
-                "response_preview": m.response_preview,
-                "error_message": m.error_message,
-                "request_body": m.request_body,
-                "response_body": m.response_body,
-                "authenticity_score": m.authenticity_score,
-                "degradation_flags": m.degradation_flags,
+                "response_preview": None if summary else m.response_preview,
+                "error_message": None if summary else m.error_message,
+                "request_body": None if summary else m.request_body,
+                "response_body": None if summary else m.response_body,
+                "authenticity_score": None if summary else m.authenticity_score,
+                "degradation_flags": None if summary else m.degradation_flags,
             }
             for m in models
         ],
@@ -278,6 +287,7 @@ async def latest_result(
 @router.get("/stations/{station_id}/history/latest/deep")
 async def latest_deep_result(
     station_id: int,
+    summary: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     s = await db.get(RelayStation, station_id)
@@ -295,8 +305,16 @@ async def latest_deep_result(
     if not batch:
         return {"batch": None, "models": []}
 
-    models_q = select(ModelResult).where(ModelResult.batch_id == batch.id).order_by(ModelResult.model_id)
-    models = (await db.execute(models_q)).scalars().all()
+    if summary:
+        models_q = (
+            select(ModelResult.id, ModelResult.model_id, ModelResult.available, ModelResult.ttft_ms)
+            .where(ModelResult.batch_id == batch.id)
+            .order_by(ModelResult.model_id)
+        )
+        models = (await db.execute(models_q)).all()
+    else:
+        models_q = select(ModelResult).where(ModelResult.batch_id == batch.id).order_by(ModelResult.model_id)
+        models = (await db.execute(models_q)).scalars().all()
 
     return {
         "batch": {
@@ -314,12 +332,12 @@ async def latest_deep_result(
                 "model_id": m.model_id,
                 "available": bool(m.available),
                 "ttft_ms": m.ttft_ms,
-                "response_preview": m.response_preview,
-                "error_message": m.error_message,
-                "request_body": m.request_body,
-                "response_body": m.response_body,
-                "authenticity_score": m.authenticity_score,
-                "degradation_flags": m.degradation_flags,
+                "response_preview": None if summary else m.response_preview,
+                "error_message": None if summary else m.error_message,
+                "request_body": None if summary else m.request_body,
+                "response_body": None if summary else m.response_body,
+                "authenticity_score": None if summary else m.authenticity_score,
+                "degradation_flags": None if summary else m.degradation_flags,
             }
             for m in models
         ],

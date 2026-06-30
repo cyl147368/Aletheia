@@ -79,13 +79,13 @@ export async function getStationModels(stationId: number): Promise<ModelCatalogR
   return data;
 }
 
-export async function getLatestResult(stationId: number): Promise<ProbeResult> {
-  const { data } = await api.get(`/stations/${stationId}/history/latest`);
+export async function getLatestResult(stationId: number, summary = false): Promise<ProbeResult> {
+  const { data } = await api.get(`/stations/${stationId}/history/latest`, { params: summary ? { summary: true } : undefined });
   return data;
 }
 
-export async function getLatestDeepResult(stationId: number): Promise<ProbeResult> {
-  const { data } = await api.get(`/stations/${stationId}/history/latest/deep`);
+export async function getLatestDeepResult(stationId: number, summary = false): Promise<ProbeResult> {
+  const { data } = await api.get(`/stations/${stationId}/history/latest/deep`, { params: summary ? { summary: true } : undefined });
   return data;
 }
 
