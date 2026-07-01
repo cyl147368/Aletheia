@@ -3,16 +3,16 @@ import { Link } from 'react-router-dom';
 import { getRouteOverview, type ProbeResult, type StationSummary } from '../api';
 
 const statusCfg: Record<string, { dot: string; badge: string; label: string }> = {
-  ok:        { dot: 'bg-[var(--ok-light)]', badge: 'bg-[var(--ok-dim)] text-[var(--ok-light)]', label: '正常' },
-  degraded:  { dot: 'bg-[var(--warn-light)]', badge: 'bg-[var(--warn-dim)] text-[var(--warn-light)]', label: '需关注' },
-  down:      { dot: 'bg-[var(--bad-light)]', badge: 'bg-[var(--bad-dim)] text-[var(--bad-light)]', label: '异常' },
-  unknown:   { dot: 'bg-[var(--ink-faint)]', badge: 'bg-[var(--surface-2)] text-[var(--ink-dim)]', label: '未探测' },
+  ok:        { dot: 'bg-[var(--ok-light)]', badge: 'bg-ok txt-ok', label: '正常' },
+  degraded:  { dot: 'bg-[var(--warn-light)]', badge: 'bg-warn txt-warn', label: '需关注' },
+  down:      { dot: 'bg-[var(--bad-light)]', badge: 'bg-bad txt-bad', label: '异常' },
+  unknown:   { dot: 'bg-[var(--ink-faint)]', badge: 'bg-surface-2 txt-faint', label: '未探测' },
 };
 
 const statusRank: Record<StationSummary['status'], number> = { down: 0, degraded: 1, unknown: 2, ok: 3 };
 
 function timeAgo(d: string | null): string {
-  if (!d) return '暂无';
+  if (!d) return '';
   const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
   if (m < 1) return '刚刚';
   if (m < 60) return `${m}分钟前`;
@@ -77,133 +77,114 @@ export default function DashboardPage() {
     <div className="page-shell">
       <div className="page-inner">
 
-        {/* ---- 顶部统计 ---- */}
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="page-header">
           <div className="flex items-center gap-3">
-            <span className={`h-2.5 w-2.5 rounded-full ${healthDot.dot}`} />
-            <span className="text-[13px] font-bold text-[var(--ink)]">{healthLabel}</span>
-            {(['ok', 'degraded', 'down', 'unknown'] as const).map(st => {
-              const n = stations.filter(s => s.status === st).length;
-              if (!n) return null;
-              return <span key={st} className={`status-pill ${statusCfg[st].badge}`}>{statusCfg[st].label} {n}</span>;
-            })}
-            <span className="text-[12px] text-[var(--ink-faint)]">可用率 {availM}/{totalM || 0}</span>
+            <span className={`status-dot ${healthDot.dot}`} />
+            <div>
+              <div className="eyebrow">Dashboard</div>
+              <h1 className="page-title m-0">{healthLabel}</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="stat-block"><span className="num">{loading ? '-' : availM}</span>/{totalM || 0} 可用</span>
+            <span className="stat-block"><span className="num">{loading ? '-' : groups.length}</span> 模型</span>
+            <span className="stat-block"><span className="num">{loading ? '-' : routeCount}</span> 渠道</span>
+            <span className="stat-block"><span className="num">{loading ? '-' : stations.length}</span> 站点</span>
           </div>
           <div className="flex gap-2">
             <button onClick={() => fetch()} disabled={refreshing} className="button-ghost">{refreshing ? '刷新中' : '刷新'}</button>
-            <Link to="/manage" className="button-ghost">管理站点</Link>
+            <Link to="/manage" className="button-ghost">管理</Link>
           </div>
         </div>
 
-        {/* ---- 统计卡片 ---- */}
-        <div className="route-scoreboard mb-5">
-          {([
-            [loading ? '...' : groups.length, '可用模型'],
-            [loading ? '...' : routeCount, '可用渠道'],
-            [loading ? '...' : stations.length, '站点'],
-          ] as const).map(([val, label]) => (
-            <div key={label} className="route-score">
-              <span className="route-score-value">{val}</span>
-              <span className="route-score-label">{label}</span>
+        {(['ok', 'degraded', 'down', 'unknown'] as const).map(st => {
+          const n = stations.filter(s => s.status === st).length;
+          if (!n) return null;
+          return <span key={st} className={`status-pill ${statusCfg[st].badge}`}>{statusCfg[st].label} {n}</span>;
+        })}
+
+        <section className="panel overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <div className="eyebrow">Matrix</div>
+              <h2 className="mt-1 text-[16px] font-bold text-[var(--ink)]">可用模型</h2>
             </div>
-          ))}
-        </div>
+            <span className="txt-faint text-[12px]">{groups.length} 个模型 · {routeCount} 条渠道</span>
+          </div>
 
-        {/* ---- 主体 ---- */}
-        <div className="home-route-layout">
-          <section className="panel overflow-hidden">
-            <div className="route-board-head">
-              <div>
-                <div className="eyebrow">Matrix</div>
-                <h2 className="mt-1 text-[18px] font-black text-[var(--ink)]">模型 - 渠道</h2>
-              </div>
-              <span className="font-mono text-[11px] text-[var(--ink-faint)]">{groups.length} models · {routeCount} routes</span>
+          {loading ? (
+            <div className="px-5 py-16 text-center"><p className="txt-faint">加载中...</p></div>
+          ) : groups.length === 0 ? (
+            <div className="px-5 py-16 text-center">
+              <p className="txt-dim">暂无可用模型</p>
+              {!refreshing && <Link to="/manage" className="button-primary mt-4">管理站点</Link>}
             </div>
-
-            {loading ? (
-              <div className="route-empty">
-                <h3 className="text-[17px] font-bold text-[var(--ink)]">加载中...</h3>
-                <p className="mt-2 text-[13px] text-[var(--ink-faint)]">正在读取最新的探测结果。</p>
-              </div>
-            ) : groups.length === 0 ? (
-              <div className="route-empty">
-                <h3 className="text-[17px] font-bold text-[var(--ink)]">暂无可用模型</h3>
-                <p className="mt-2 text-[13px] text-[var(--ink-faint)]">完成一次探测后，这里会显示可用模型和渠道。</p>
-                {!refreshing && <Link to="/manage" className="button-primary mt-5">管理站点</Link>}
-              </div>
-            ) : (
-              <div className="route-model-list">
-                {groups.map(g => {
-                  const fastest = Math.min(...g.stations.map(s => s.ttftMs));
-                  const sortedSrc = [...g.stations].sort((a, b) => a.ttftMs - b.ttftMs);
-                  return (
-                    <article key={g.modelId} className="route-model-row">
-                      <div className="route-model-main">
-                        <div className="min-w-0">
-                          <h3 className="truncate font-mono text-[14px] font-bold text-[var(--ink)]">{g.modelId}</h3>
-                          <p className="mt-0.5 text-[11px] text-[var(--ink-faint)]">{timeAgo(g.latestProbeAt)}</p>
-                        </div>
-                        <div className="route-model-meta">
-                          <span className="status-pill bg-[var(--ok-dim)] text-[var(--ok-light)]">{g.stations.length}</span>
-                          <span className="status-pill bg-[var(--accent-dim)] text-[var(--accent-light)]">{fastest}ms</span>
-                        </div>
+          ) : (
+            <div>
+              {groups.map(g => {
+                const fastest = Math.min(...g.stations.map(s => s.ttftMs));
+                const sortedSrc = [...g.stations].sort((a, b) => a.ttftMs - b.ttftMs);
+                return (
+                  <div key={g.modelId}>
+                    <div className="model-head">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono text-[13px] font-bold text-[var(--ink)]">{g.modelId}</span>
+                        <span className="ml-3 txt-faint text-[11px]">{timeAgo(g.latestProbeAt)}</span>
                       </div>
-                      <div className="channel-strip">
-                        {sortedSrc.map(s => {
-                          const cfg = statusCfg[s.status] ?? statusCfg.unknown;
-                          return (
-                            <Link key={`${g.modelId}-${s.id}`} to={`/stations/${s.id}`} className="channel-card" title={`${s.name} · ${s.ttftMs}ms`}>
-                              <span className={`status-dot ${cfg.dot}`} />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[12px] font-bold text-[var(--ink)]">{s.name}</span>
-                                <span className="mt-0.5 block font-mono text-[11px] text-[var(--ink-faint)]">{s.ttftMs}ms</span>
-                              </span>
-                            </Link>
-                          );
-                        })}
+                      <div className="flex gap-2">
+                        <span className="stat-block">{g.stations.length}</span>
+                        <span className="stat-block">{fastest}ms</span>
                       </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                    </div>
+                    <div className="model-channels">
+                      {sortedSrc.map(s => {
+                        const cfg = statusCfg[s.status] ?? statusCfg.unknown;
+                        return (
+                          <Link key={`${g.modelId}-${s.id}`} to={`/stations/${s.id}`} className="channel-tag" title={`${s.name} · ${s.ttftMs}ms`}>
+                            <span className={`status-dot ${cfg.dot}`} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12px] font-bold text-[var(--ink)]">{s.name}</span>
+                              <span className="block font-mono text-[10px] txt-faint">{s.ttftMs}ms</span>
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-          <aside className="space-y-5">
-            <section className="panel overflow-hidden">
-              <div className="border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
-                <div className="eyebrow">Stations</div>
-                <h2 className="mt-1 text-[13px] font-bold text-[var(--ink)]">站点列表</h2>
-              </div>
-              {sorted.length === 0 ? (
-                <div className="px-5 py-10 text-center text-[13px] text-[var(--ink-faint)]">暂无站点</div>
-              ) : (
-                <div>{sorted.map(s => {
-                  const cfg = statusCfg[s.status] ?? statusCfg.unknown;
-                  const b = results[s.id]?.batch;
-                  return (
-                    <Link key={s.id} to={`/stations/${s.id}`} className="data-row">
-                      <span className={`status-dot ${cfg.dot}`} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-bold text-[var(--ink)]">{s.name}</span>
-                        <span className="mt-0.5 block truncate font-mono text-[10px] text-[var(--ink-faint)]">{s.base_url}</span>
-                      </span>
-                      <span className="font-mono text-[11px] text-[var(--ink-dim)]">{b ? `${b.available_models}/${b.total_models}` : refreshing ? '...' : '-'}</span>
-                    </Link>
-                  );
-                })}</div>
-              )}
-            </section>
+        <section className="panel mt-5 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <div className="eyebrow">Stations</div>
+              <h2 className="mt-1 text-[16px] font-bold text-[var(--ink)]">站点列表</h2>
+            </div>
+            <Link to="/manage" className="button-ghost">管理</Link>
+          </div>
+          {sorted.length === 0 ? (
+            <div className="px-5 py-10 text-center txt-faint text-[13px]">暂无站点</div>
+          ) : (
+            <div>{sorted.map(s => {
+              const cfg = statusCfg[s.status] ?? statusCfg.unknown;
+              const b = results[s.id]?.batch;
+              return (
+                <Link key={s.id} to={`/stations/${s.id}`} className="data-row">
+                  <span className={`status-dot ${cfg.dot}`} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-bold text-[var(--ink)]">{s.name}</span>
+                    <span className="block truncate font-mono text-[10px] txt-faint">{s.base_url}</span>
+                  </span>
+                  <span className="stat-block">{b ? `${b.available_models}/${b.total_models}` : refreshing ? '...' : '-'}</span>
+                </Link>
+              );
+            })}</div>
+          )}
+        </section>
 
-            <section className="panel p-5">
-              <div className="eyebrow">说明</div>
-              <h2 className="mt-2 text-[17px] font-black text-[var(--ink)]">怎么看</h2>
-              <p className="mt-3 text-[13px] leading-6 text-[var(--ink-dim)]">
-                每行是一个可用模型，行内卡片是对应的来源站点。点击站点卡片进入详情页，查看探测记录和历史。
-              </p>
-            </section>
-          </aside>
-        </div>
       </div>
     </div>
   );
