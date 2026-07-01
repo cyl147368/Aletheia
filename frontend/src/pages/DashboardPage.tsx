@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getLatestResult, listStations, type ProbeResult, type Station } from '../api';
+import { getRouteOverview, type ProbeResult, type StationSummary } from '../api';
 
 const statusConfig: Record<string, { dot: string; badge: string; label: string }> = {
   ok: {
@@ -25,7 +25,7 @@ const statusConfig: Record<string, { dot: string; badge: string; label: string }
   },
 };
 
-const statusRank: Record<Station['status'], number> = {
+const statusRank: Record<StationSummary['status'], number> = {
   down: 0,
   degraded: 1,
   unknown: 2,
@@ -46,7 +46,7 @@ function timeAgo(dateStr: string | null): string {
 interface AvailableModelStation {
   id: number;
   name: string;
-  status: Station['status'];
+  status: StationSummary['status'];
   probedAt: string;
   ttftMs: number;
 }
@@ -57,7 +57,7 @@ interface AvailableModelGroup {
   latestProbeAt: string;
 }
 
-function buildAvailableModelGroups(stations: Station[], results: Record<number, ProbeResult | null>): AvailableModelGroup[] {
+function buildAvailableModelGroups(stations: StationSummary[], results: Record<number, ProbeResult | null>): AvailableModelGroup[] {
   const stationById = new Map(stations.map((station) => [station.id, station]));
   const groups = new Map<string, AvailableModelGroup>();
 
@@ -101,7 +101,7 @@ function buildAvailableModelGroups(stations: Station[], results: Record<number, 
   });
 }
 
-function healthLabel(stations: Station[]) {
+function healthLabel(stations: StationSummary[]) {
   if (stations.length === 0) return { label: '未配置站点', config: statusConfig.unknown };
   if (stations.some((station) => station.status === 'down')) return { label: '存在异常站点', config: statusConfig.down };
   if (stations.some((station) => station.status === 'degraded')) return { label: '部分站点需关注', config: statusConfig.degraded };
@@ -110,7 +110,7 @@ function healthLabel(stations: Station[]) {
 }
 
 export default function DashboardPage() {
-  const [stations, setStations] = useState<Station[]>([]);
+  const [stations, setStations] = useState<StationSummary[]>([]);
   const [results, setResults] = useState<Record<number, ProbeResult | null>>({});
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshingResults, setRefreshingResults] = useState(false);
@@ -118,30 +118,12 @@ export default function DashboardPage() {
   const fetchData = useCallback(async (isStale: () => boolean = () => false) => {
     setRefreshingResults(true);
     try {
-      const nextStations = await listStations();
+      const overview = await getRouteOverview();
       if (isStale()) return;
 
-      setStations(nextStations);
+      setStations(overview.stations);
+      setResults(Object.fromEntries(overview.results.map((result) => [result.station_id, result])));
       setInitialLoading(false);
-      setResults((prev) => {
-        const nextResults: Record<number, ProbeResult | null> = {};
-        for (const station of nextStations) {
-          nextResults[station.id] = prev[station.id] ?? null;
-        }
-        return nextResults;
-      });
-
-      await Promise.all(nextStations.map(async (station) => {
-        let nextResult: ProbeResult | null = null;
-        try {
-          nextResult = await getLatestResult(station.id, true);
-        } catch {
-          nextResult = null;
-        }
-        if (!isStale()) {
-          setResults((prev) => ({ ...prev, [station.id]: nextResult }));
-        }
-      }));
     } catch {
       if (!isStale()) {
         setStations([]);
@@ -214,7 +196,7 @@ export default function DashboardPage() {
           <span className="text-[12px] text-[var(--ink-faint)]">
             {loadingResults ? '模型可用率更新中...' : `模型可用率 ${availableModels}/${totalModels || 0}`}
           </span>
-          {(['ok', 'degraded', 'down', 'unknown'] as Station['status'][]).map((status) => {
+          {(['ok', 'degraded', 'down', 'unknown'] as StationSummary['status'][]).map((status) => {
             const config = statusConfig[status];
             const count = stations.filter((station) => station.status === status).length;
             return (
@@ -243,14 +225,14 @@ export default function DashboardPage() {
               <div className="route-empty">
                 <h3 className="text-[17px] font-bold text-[var(--ink)]">正在加载站点</h3>
                 <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--ink-faint)]">
-                  先读取站点列表，随后逐步填充模型和渠道结果。
+                  正在读取最新保存的模型和渠道结果。
                 </p>
               </div>
             ) : availableModelGroups.length === 0 ? (
               <div className="route-empty">
                 <h3 className="text-[17px] font-bold text-[var(--ink)]">{loadingResults ? '正在读取模型和渠道' : '暂无可用模型数据'}</h3>
                 <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--ink-faint)]">
-                  {loadingResults ? '最新探测结果会按站点逐步出现。' : '完成一次站点探测后，这里会直接展示模型、来源渠道和 TTFT。'}
+                  {loadingResults ? '正在读取数据库中已有的最新结果。' : '完成一次站点探测后，这里会直接展示模型、来源渠道和 TTFT。'}
                 </p>
                 {!loadingResults && <Link to="/manage" className="button-primary mt-5">添加或检查站点</Link>}
               </div>

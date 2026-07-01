@@ -1,8 +1,8 @@
 import api from './client';
-import type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing, BatchSummary, StationHistoryResult } from './types';
+import type { Station, StationSummary, Overview, RouteOverviewResult, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing, BatchSummary, StationHistoryResult } from './types';
 
 // Re-export types for pages
-export type { Station, Overview, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing, BatchSummary, StationHistoryResult };
+export type { Station, StationSummary, Overview, RouteOverviewResult, ProbeResult, ProbeAttempt, ProbeRequestRecord, ModelResult, ModelCatalogResult, ModelCatalogItem, ModelPricing, BatchSummary, StationHistoryResult };
 
 export async function login(password: string): Promise<string> {
   const { data } = await api.post('/auth/login', { password });
@@ -11,6 +11,11 @@ export async function login(password: string): Promise<string> {
 
 export async function getOverview(): Promise<Overview> {
   const { data } = await api.get('/overview');
+  return data;
+}
+
+export async function getRouteOverview(): Promise<RouteOverviewResult> {
+  const { data } = await api.get('/route-overview');
   return data;
 }
 

@@ -5,7 +5,6 @@ import DashboardPage from './pages/DashboardPage';
 import StationDetailPage from './pages/StationDetailPage';
 import ProbeResultPage from './pages/ProbeResultPage';
 import ManagePage from './pages/ManagePage';
-import { listStations, type Station } from './api';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const token = localStorage.getItem('aletheia_token');
@@ -30,34 +29,7 @@ function useTheme() {
   return { theme, toggle };
 }
 
-function summarizeStations(stations: Station[]) {
-  if (stations.some((station) => station.status === 'down')) {
-    return { label: '有异常', tone: 'bg-[var(--bad-dim)] text-[var(--bad-light)]', dot: 'bg-[var(--bad-light)] text-[var(--bad-light)]' };
-  }
-  if (stations.some((station) => station.status === 'degraded')) {
-    return { label: '需关注', tone: 'bg-[var(--warn-dim)] text-[var(--warn-light)]', dot: 'bg-[var(--warn-light)] text-[var(--warn-light)]' };
-  }
-  if (stations.length === 0 || stations.some((station) => station.status === 'unknown')) {
-    return { label: '待检测', tone: 'bg-[var(--surface-2)] text-[var(--ink-dim)]', dot: 'bg-[var(--ink-faint)] text-[var(--ink-faint)]' };
-  }
-  return { label: '运行正常', tone: 'bg-[var(--ok-dim)] text-[var(--ok-light)]', dot: 'bg-[var(--ok-light)] text-[var(--ok-light)]' };
-}
-
 function TopNav({ onLogout, onToggleTheme, theme }: { onLogout: () => void; onToggleTheme: () => void; theme: string }) {
-  const [stations, setStations] = useState<Station[]>([]);
-
-  const fetchStations = useCallback(async () => {
-    try {
-      setStations(await listStations());
-    } catch {
-      setStations([]);
-    }
-  }, []);
-
-  useEffect(() => { fetchStations(); }, [fetchStations]);
-
-  const summary = summarizeStations(stations);
-
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -79,14 +51,6 @@ function TopNav({ onLogout, onToggleTheme, theme }: { onLogout: () => void; onTo
         </nav>
 
         <div className="topbar-actions">
-          <span className={`status-pill ${summary.tone}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${summary.dot}`} />
-            {summary.label}
-          </span>
-          <span className="hidden rounded-full border px-3 py-1.5 font-mono text-[11px] text-[var(--ink-faint)] sm:inline-flex" style={{ borderColor: 'var(--line)' }}>
-            {stations.length} stations
-          </span>
-          <button type="button" onClick={fetchStations} className="button-ghost">刷新</button>
           <button type="button" onClick={onToggleTheme} className="button-ghost">{theme === 'dark' ? '浅色' : '深色'}</button>
           <button type="button" onClick={onLogout} className="button-ghost">退出</button>
         </div>

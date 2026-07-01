@@ -162,9 +162,11 @@ export default function StationDetailPage() {
   const [probing, setProbing] = useState(false);
   const [deepDetectingMode, setDeepDetectingMode] = useState<DetectionMode | null>(null);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [stationError, setStationError] = useState('');
   const [expandedModel, setExpandedModel] = useState<number | null>(null);
 
   const fetchData = useCallback(async (isStale: () => boolean = () => false) => {
+    setStationError('');
     try {
       const nextStation = await getStation(stationId);
       if (isStale()) return;
@@ -186,6 +188,12 @@ export default function StationDetailPage() {
 
       if (!nextResult?.batch && nextDeepResult?.batch) {
         setResultView('deep');
+      }
+    } catch (e: unknown) {
+      if (!isStale()) {
+        const message = e instanceof Error ? e.message : String(e);
+        setStationError(message || '站点加载失败');
+        setStation(null);
       }
     } finally {
       if (!isStale()) {
@@ -262,6 +270,20 @@ export default function StationDetailPage() {
       setDeepDetectingMode(null);
     }
   };
+
+  if (!station && stationError) {
+    return (
+      <div className="page-shell">
+        <div className="page-inner">
+          <section className="panel px-6 py-16 text-center">
+            <h1 className="text-[18px] font-bold text-[var(--ink)]">站点不存在或无法访问</h1>
+            <p className="mt-2 text-[13px] text-[var(--ink-faint)]">{stationError}</p>
+            <Link to="/" className="button-primary mt-5">返回总览</Link>
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   if (!station) {
     return <div className="flex h-full items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;

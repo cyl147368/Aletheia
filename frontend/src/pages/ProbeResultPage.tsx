@@ -23,17 +23,43 @@ export default function ProbeResultPage() {
   const [station, setStation] = useState<Station | null>(null);
   const [result, setResult] = useState<ProbeResult | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
+    let ignore = false;
+    setLoadError('');
+    setStation(null);
+    setResult(null);
     Promise.all([
       getStation(stationId),
       getBatchDetail(stationId, Number(batchId)),
     ]).then(([nextStation, nextResult]) => {
+      if (ignore) return;
       setStation(nextStation);
       setResult(nextResult);
       setExpandedId(nextResult.models[0]?.id ?? null);
+    }).catch((e: unknown) => {
+      if (ignore) return;
+      const message = e instanceof Error ? e.message : String(e);
+      setLoadError(message || '探测记录加载失败');
     });
+
+    return () => { ignore = true; };
   }, [stationId, batchId]);
+
+  if (loadError) {
+    return (
+      <div className="page-shell">
+        <div className="page-inner">
+          <section className="panel px-6 py-16 text-center">
+            <h1 className="text-[18px] font-bold text-[var(--ink)]">探测记录不存在或无法访问</h1>
+            <p className="mt-2 text-[13px] text-[var(--ink-faint)]">{loadError}</p>
+            <Link to={`/stations/${stationId}`} className="button-primary mt-5">返回站点</Link>
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   if (!station || !result?.batch) {
     return <div className="flex h-full items-center justify-center text-sm text-[var(--ink-faint)]">加载中...</div>;

@@ -13,6 +13,8 @@ export interface Station {
   updated_at: string;
 }
 
+export type StationSummary = Omit<Station, 'api_key' | 'api_key_masked'>;
+
 export interface BatchSummary {
   id: number;
   probed_at: string;
@@ -88,6 +90,11 @@ export interface ProbeRequestRecord {
 export interface ProbeResult {
   batch: BatchSummary | null;
   models: ModelResult[];
+}
+
+export interface RouteOverviewResult {
+  stations: StationSummary[];
+  results: Array<ProbeResult & { station_id: number }>;
 }
 
 export interface Overview {

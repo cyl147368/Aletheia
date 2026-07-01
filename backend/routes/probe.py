@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings
@@ -42,6 +42,48 @@ def _model_catalog_item(model) -> dict:
     return {
         "id": model.id,
         "pricing": model.pricing,
+    }
+
+
+def _station_summary(s: RelayStation) -> dict:
+    return {
+        "id": s.id,
+        "name": s.name,
+        "base_url": s.base_url,
+        "official_url": s.official_url,
+        "schedule_enabled": bool(s.schedule_enabled),
+        "schedule_interval_hours": s.schedule_interval_hours,
+        "status": s.status,
+        "last_probe_at": s.last_probe_at,
+        "created_at": s.created_at,
+        "updated_at": s.updated_at,
+    }
+
+
+def _batch_summary(batch: ProbeBatch) -> dict:
+    return {
+        "id": batch.id,
+        "probed_at": batch.probed_at,
+        "total_models": batch.total_models,
+        "available_models": batch.available_models,
+        "unavailable_models": batch.unavailable_models,
+        "duration_ms": batch.duration_ms,
+        "batch_type": batch.batch_type,
+    }
+
+
+def _model_result_summary(model: ModelResult) -> dict:
+    return {
+        "id": model.id,
+        "model_id": model.model_id,
+        "available": bool(model.available),
+        "ttft_ms": model.ttft_ms,
+        "response_preview": None,
+        "error_message": None,
+        "request_body": None,
+        "response_body": None,
+        "authenticity_score": None,
+        "degradation_flags": None,
     }
 
 
@@ -385,10 +427,51 @@ async def batch_detail(
     }
 
 
+@router.get("/route-overview")
+async def route_overview(db: AsyncSession = Depends(get_db)):
+    latest_batches = (
+        select(
+            ProbeBatch.station_id.label("station_id"),
+            func.max(ProbeBatch.id).label("batch_id"),
+        )
+        .where(ProbeBatch.batch_type == "probe")
+        .group_by(ProbeBatch.station_id)
+        .subquery()
+    )
+
+    rows = (
+        await db.execute(
+            select(RelayStation, ProbeBatch, ModelResult)
+            .outerjoin(latest_batches, latest_batches.c.station_id == RelayStation.id)
+            .outerjoin(ProbeBatch, ProbeBatch.id == latest_batches.c.batch_id)
+            .outerjoin(ModelResult, (ModelResult.batch_id == ProbeBatch.id) & (ModelResult.available == 1))
+            .order_by(RelayStation.name, ModelResult.model_id)
+        )
+    ).all()
+
+    stations_by_id: dict[int, dict] = {}
+    results_by_station: dict[int, dict] = {}
+
+    for station, batch, model in rows:
+        if station.id not in stations_by_id:
+            stations_by_id[station.id] = _station_summary(station)
+            results_by_station[station.id] = {
+                "station_id": station.id,
+                "batch": _batch_summary(batch) if batch else None,
+                "models": [],
+            }
+
+        if model:
+            results_by_station[station.id]["models"].append(_model_result_summary(model))
+
+    return {
+        "stations": list(stations_by_id.values()),
+        "results": list(results_by_station.values()),
+    }
+
+
 @router.get("/overview")
 async def overview(db: AsyncSession = Depends(get_db)):
-    from sqlalchemy import func
-
     # 各状态计数
     status_q = (
         select(RelayStation.status, func.count(RelayStation.id))

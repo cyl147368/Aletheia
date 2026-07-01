@@ -63,6 +63,19 @@ class ProbeRouteBatchTypeTest(unittest.TestCase):
         self.assertIn('"response_body": m.response_body', source)
         self.assertNotIn("None if summary else", source)
 
+    def test_route_overview_is_database_only(self):
+        route_overview = self._function("route_overview")
+        source = ast.get_source_segment(self.source, route_overview)
+
+        self.assertIn('/route-overview', self.source)
+        self.assertIn('ProbeBatch.batch_type == "probe"', source)
+        self.assertIn("ModelResult.available == 1", source)
+        self.assertIn('"stations": list(stations_by_id.values())', source)
+        self.assertIn('"results": list(results_by_station.values())', source)
+        self.assertNotIn("list_model_catalog", source)
+        self.assertNotIn("probe_station", source)
+        self.assertNotIn("deep_probe_station", source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,8 +2,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException
 
 from config import Settings
 from database import init_db
@@ -14,6 +13,7 @@ from routes.probe import router as probe_router
 from routes.settings import router as settings_router
 from services.scheduler import init_scheduler
 from database import SessionLocal
+from static_files import SPAStaticFiles
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aletheia")
@@ -64,6 +64,17 @@ app.include_router(settings_router)
 async def health():
     return {"ok": True}
 
+
+@app.api_route("/api", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def api_root_not_found():
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+async def api_not_found(path: str):
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
 # 前端静态文件（支持镜像内复制和仓库目录挂载两种部署方式）
 backend_dir = os.path.dirname(__file__)
 static_candidates = [
@@ -72,4 +83,4 @@ static_candidates = [
 ]
 static_dir = next((path for path in static_candidates if os.path.isdir(path)), None)
 if static_dir:
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    app.mount("/", SPAStaticFiles(directory=static_dir, html=True), name="static")
