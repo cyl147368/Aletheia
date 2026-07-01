@@ -157,7 +157,7 @@ export default function ManagePage() {
             <h1 className="page-title">站点管理</h1>
             <p className="page-subtitle">维护中转站地址、密钥和定时探测间隔。</p>
           </div>
-          <button type="button" onClick={openAdd} className="button-primary">添加站点</button>
+          <button type="button" onClick={openAdd} className="btn-primary">添加站点</button>
         </header>
 
         <div className="mb-5 flex w-fit gap-1 rounded-lg border p-1" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
@@ -204,7 +204,7 @@ export default function ManagePage() {
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      <button type="button" onClick={() => copyKey(station)} disabled={!station.api_key} className="button-ghost min-h-0 px-2 py-1 text-[10px]">
+                      <button type="button" onClick={() => copyKey(station)} disabled={!station.api_key} className="btn-ghost min-h-0 px-2 py-1 text-[10px]">
                         复制 Key
                       </button>
                       <div className="mt-1 font-mono text-[10px] text-[var(--ink-faint)]">{station.api_key_masked}</div>
@@ -243,7 +243,7 @@ export default function ManagePage() {
               style={{ background: 'var(--bg)', borderColor: 'var(--line)', color: 'var(--ink-dim)' }}
               placeholder='[{"name":"站点名称","base_url":"https://api.example.com","api_key":"sk-xxx"}]'
             />
-            <button type="button" onClick={handleImport} disabled={importing || !importText.trim()} className="button-primary mt-4 w-full">
+            <button type="button" onClick={handleImport} disabled={importing || !importText.trim()} className="btn-primary mt-4 w-full">
               {importing ? '导入中...' : '导入'}
             </button>
             {importMsg && (
@@ -257,13 +257,13 @@ export default function ManagePage() {
 
       {isFormOpen && (
         <div className="modal-overlay" onClick={resetForm}>
-          <div className="modal-content panel w-full max-w-[560px] p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content panel p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <div className="eyebrow">{editingId ? 'Edit' : 'New'}</div>
                 <h2 className="mt-1 text-[18px] font-bold text-[var(--ink)]">{editingId ? '编辑站点' : '添加站点'}</h2>
               </div>
-              <button type="button" onClick={resetForm} className="button-ghost px-3">关闭</button>
+              <button type="button" onClick={resetForm} className="btn-ghost px-3">关闭</button>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <label className="flex flex-col gap-1.5">
@@ -295,8 +295,8 @@ export default function ManagePage() {
                 启用定时探测
               </label>
               <div className="flex gap-2">
-                <button type="button" onClick={resetForm} className="button-ghost">取消</button>
-                <button type="button" onClick={handleSave} disabled={saving} className="button-primary">
+                <button type="button" onClick={resetForm} className="btn-ghost">取消</button>
+                <button type="button" onClick={handleSave} disabled={saving} className="btn-primary">
                   {saving ? '保存中...' : '保存'}
                 </button>
               </div>

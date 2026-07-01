@@ -54,7 +54,7 @@ export default function ProbeResultPage() {
           <section className="panel px-6 py-16 text-center">
             <h1 className="text-[18px] font-bold text-[var(--ink)]">探测记录不存在或无法访问</h1>
             <p className="mt-2 text-[13px] text-[var(--ink-faint)]">{loadError}</p>
-            <Link to={`/stations/${stationId}`} className="button-primary mt-5">返回站点</Link>
+            <Link to={`/stations/${stationId}`} className="btn-primary mt-5">返回站点</Link>
           </section>
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function ProbeResultPage() {
             <h1 className="page-title">{resultLabel} #{result.batch.id}</h1>
             <p className="page-subtitle font-mono">{new Date(result.batch.probed_at).toLocaleString('zh-CN')}</p>
           </div>
-          <Link to={`/stations/${stationId}`} className="button-ghost">返回站点</Link>
+          <Link to={`/stations/${stationId}`} className="btn-ghost">返回站点</Link>
         </header>
 
         <section className="panel mb-5 p-5">
@@ -100,7 +100,7 @@ export default function ProbeResultPage() {
         </section>
 
         <section className="panel overflow-hidden">
-          <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
+          <div className="section-head">
             <h2 className="section-title">模型明细</h2>
             <span className="font-mono text-[11px] text-[var(--ink-faint)]">{sortedModels.length} models</span>
           </div>
@@ -160,7 +160,7 @@ export default function ProbeResultPage() {
                             const req = requests[idx];
                             return (
                               <div key={`${attempt.endpoint}-${idx}`} className="panel overflow-hidden">
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: 'var(--line)' }}>
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs font-semibold text-[var(--ink)]">{endpointLabel[attempt.endpoint] ?? attempt.endpoint}</span>
                                     <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-[var(--ink-dim)]" style={{ borderColor: 'var(--line-soft)' }}>{attemptRole(idx, attempts)}</span>

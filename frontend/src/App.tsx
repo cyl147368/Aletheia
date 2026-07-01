@@ -37,7 +37,7 @@ function TopNav({ onLogout, onToggleTheme, theme }: { onLogout: () => void; onTo
           <span className="brand-logo">A</span>
           <span>
             <span className="block text-[15px] font-black leading-none tracking-tight text-[var(--ink)]">Aletheia</span>
-            <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ink-faint)]">Truth Monitor</span>
+            <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ink-faint)]">Truth Monitor</span>
           </span>
         </NavLink>
 
@@ -51,8 +51,8 @@ function TopNav({ onLogout, onToggleTheme, theme }: { onLogout: () => void; onTo
         </nav>
 
         <div className="topbar-actions">
-          <button type="button" onClick={onToggleTheme} className="button-ghost">{theme === 'dark' ? '浅色' : '深色'}</button>
-          <button type="button" onClick={onLogout} className="button-ghost">退出</button>
+          <button type="button" onClick={onToggleTheme} className="btn-ghost">{theme === 'dark' ? '浅色' : '深色'}</button>
+          <button type="button" onClick={onLogout} className="btn-ghost">退出</button>
         </div>
       </div>
     </header>
