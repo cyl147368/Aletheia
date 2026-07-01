@@ -155,7 +155,6 @@ export default function ManagePage() {
           <div>
             <div className="eyebrow">Manage</div>
             <h1 className="page-title">站点管理</h1>
-            <p className="page-subtitle">维护中转站地址、密钥和定时探测间隔。</p>
           </div>
           <button type="button" onClick={openAdd} className="button-primary">添加站点</button>
         </header>
@@ -228,12 +227,8 @@ export default function ManagePage() {
         ) : (
           <section className="panel p-5">
             <div className="mb-4">
-              <h2 className="section-title">批量导入</h2>
-              <p className="mt-2 text-[13px] leading-6 text-[var(--ink-dim)]">
-                粘贴 JSON 数组，字段包含 <code className="font-mono text-[12px] text-[var(--ink)]">name</code>、
-                <code className="font-mono text-[12px] text-[var(--ink)]">base_url</code>、
-                <code className="font-mono text-[12px] text-[var(--ink)]">api_key</code>。
-              </p>
+              <div className="eyebrow">Import</div>
+              <h2 className="mt-1 text-[18px] font-bold text-[var(--ink)]">批量导入</h2>
             </div>
             <textarea
               value={importText}

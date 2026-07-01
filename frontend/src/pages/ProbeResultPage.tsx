@@ -71,25 +71,21 @@ export default function ProbeResultPage() {
   return (
     <div className="page-shell">
       <div className="page-inner">
-        <header className="page-header">
-          <div>
+
+        <section className="panel hero-band">
+          <div className="min-w-0">
             <div className="eyebrow">
               <Link to="/" className="transition hover:text-[var(--accent-light)]">Overview</Link>
               <span className="mx-2 text-[var(--ink-faint)]">/</span>
               <Link to={`/stations/${stationId}`} className="transition hover:text-[var(--accent-light)]">{station.name}</Link>
             </div>
-            <h1 className="page-title">{resultLabel} #{result.batch.id}</h1>
-            <p className="page-subtitle font-mono">{new Date(result.batch.probed_at).toLocaleString('zh-CN')}</p>
-          </div>
-          <Link to={`/stations/${stationId}`} className="button-ghost">返回站点</Link>
-        </header>
-
-        <section className="panel mb-5 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="section-title">本次结果</h2>
-              <p className="mt-1 text-[12px] text-[var(--ink-faint)]">直接查看模型是否可用，展开行可看请求和响应证据。</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h1 className="page-title m-0">{resultLabel} #{result.batch.id}</h1>
             </div>
+            <p className="mt-1 font-mono text-[12px] text-[var(--ink-faint)]">{new Date(result.batch.probed_at).toLocaleString('zh-CN')}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to={`/stations/${stationId}`} className="button-ghost">返回站点</Link>
             <div className="flex flex-wrap gap-2">
               <span className="status-pill bg-[var(--ok-dim)] text-[var(--ok-light)]">可用 {result.batch.available_models}</span>
               <span className="status-pill bg-[var(--bad-dim)] text-[var(--bad-light)]">不可用 {result.batch.unavailable_models}</span>
@@ -102,7 +98,7 @@ export default function ProbeResultPage() {
         <section className="panel overflow-hidden">
           <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
             <h2 className="section-title">模型明细</h2>
-            <span className="font-mono text-[11px] text-[var(--ink-faint)]">{sortedModels.length} models</span>
+            <span className="font-mono text-[11px] text-[var(--ink-faint)]">{sortedModels.length} 个模型</span>
           </div>
           <div>
             {sortedModels.map((model) => {
