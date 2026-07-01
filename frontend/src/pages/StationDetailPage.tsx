@@ -103,7 +103,7 @@ function ModelExpandRow({ model }: { model: NonNullable<ProbeResult>['models'][n
           const req = requests[idx];
           return (
             <div key={`${attempt.endpoint}-${idx}`} className="panel overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: 'var(--line)' }}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold text-[var(--ink)]">{endpointLabel[attempt.endpoint] ?? attempt.endpoint}</span>
                   <span className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium text-[var(--ink-dim)]" style={{ borderColor: 'var(--line-soft)' }}>{attemptRole(idx, attempts)}</span>
@@ -278,7 +278,7 @@ export default function StationDetailPage() {
           <section className="panel px-6 py-16 text-center">
             <h1 className="text-[18px] font-bold text-[var(--ink)]">站点不存在或无法访问</h1>
             <p className="mt-2 text-[13px] text-[var(--ink-faint)]">{stationError}</p>
-            <Link to="/" className="btn-primary mt-5">返回总览</Link>
+            <Link to="/" className="button-primary mt-5">返回总览</Link>
           </section>
         </div>
       </div>
@@ -329,7 +329,7 @@ export default function StationDetailPage() {
   return (
     <div className="page-shell">
       <div className="page-inner">
-        <section className="panel hero-section">
+        <section className="panel hero-band">
           <div className="min-w-0">
             <div className="eyebrow">
               <Link to="/" className="transition hover:text-[var(--accent-light)]">Overview</Link>
@@ -341,11 +341,11 @@ export default function StationDetailPage() {
                 {statusText[station.status]}
               </span>
             </div>
-            <p className="mt-3 font-mono text-[12px] text-[var(--ink-faint)]">{station.base_url}</p>
+            <p className="mt-3 truncate font-mono text-[12px] text-[var(--ink-faint)]">{station.base_url}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {station.official_url && (
-              <a href={station.official_url} target="_blank" rel="noreferrer" className="btn-ghost">官网</a>
+              <a href={station.official_url} target="_blank" rel="noreferrer" className="button-ghost">官网</a>
             )}
             <span className="rounded-md border px-3 py-2 text-[12px] text-[var(--ink-dim)]" style={{ borderColor: 'var(--line)' }}>
               {station.schedule_enabled ? `每 ${station.schedule_interval_hours}h 探测` : '定时关闭'}
@@ -353,8 +353,8 @@ export default function StationDetailPage() {
           </div>
         </section>
 
-        <div className="detail-grid">
-          <aside className="sticky-side space-y-4">
+        <div className="detail-layout">
+          <aside className="sticky-pane space-y-4">
             <section className="panel overflow-hidden">
               <div className="border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
                 <div className="eyebrow">Action</div>
@@ -373,17 +373,17 @@ export default function StationDetailPage() {
                   disabled={!hasModelCatalog}
                 />
                 <div className="grid grid-cols-3 gap-2">
-                  <button type="button" onClick={fetchModels} disabled={loadingModels || isBusy} className="btn-ghost px-0">
+                  <button type="button" onClick={fetchModels} disabled={loadingModels || isBusy} className="button-ghost px-0">
                     {loadingModels ? '获取中' : hasModelCatalog ? '刷新模型' : '获取模型'}
                   </button>
-                  <button type="button" onClick={selectAllModels} disabled={!hasModelCatalog || isBusy} className="btn-ghost px-0">全选</button>
-                  <button type="button" onClick={clearModels} disabled={!hasModelCatalog || isBusy} className="btn-ghost px-0">清空</button>
+                  <button type="button" onClick={selectAllModels} disabled={!hasModelCatalog || isBusy} className="button-ghost px-0">全选</button>
+                  <button type="button" onClick={clearModels} disabled={!hasModelCatalog || isBusy} className="button-ghost px-0">清空</button>
                 </div>
                 <button
                   type="button"
                   onClick={handleProbe}
                   disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
-                  className="btn-primary h-10 w-full"
+                  className="button-primary h-10 w-full"
                 >
                   {probeButtonText}
                 </button>
@@ -398,7 +398,7 @@ export default function StationDetailPage() {
                       type="button"
                       onClick={() => handleDeepDetection(mode)}
                       disabled={isBusy || loadingModels || !hasModelCatalog || selectedCount === 0}
-                      className="btn-ghost px-0"
+                      className="button-ghost px-0"
                     >
                       {deepDetectingMode === mode ? '运行中' : detectionModeLabel[mode]}
                     </button>
@@ -409,7 +409,7 @@ export default function StationDetailPage() {
 
             <section className="panel overflow-hidden">
               <div className="border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
-                <h2 className="text-[13px] font-bold text-[var(--ink)]">模型列表</h2>
+                <h2 className="section-title">模型列表</h2>
               </div>
               {modelLoadError ? (
                 <div className="px-5 py-4 text-[12px] text-[var(--bad-light)]">{modelLoadError}</div>
@@ -456,7 +456,7 @@ export default function StationDetailPage() {
                     type="button"
                     onClick={() => setResultView('probe')}
                     disabled={!hasProbeResult}
-                    className={`btn-ghost ${resultView === 'probe' ? 'border-[var(--accent)] text-[var(--accent-light)]' : ''}`}
+                    className={`button-ghost ${resultView === 'probe' ? 'border-[var(--accent)] text-[var(--accent-light)]' : ''}`}
                   >
                     普通探测
                   </button>
@@ -464,12 +464,12 @@ export default function StationDetailPage() {
                     type="button"
                     onClick={() => setResultView('deep')}
                     disabled={!hasDeepResult}
-                    className={`btn-ghost ${resultView === 'deep' ? 'border-[var(--accent)] text-[var(--accent-light)]' : ''}`}
+                    className={`button-ghost ${resultView === 'deep' ? 'border-[var(--accent)] text-[var(--accent-light)]' : ''}`}
                   >
                     深度检测
                   </button>
                   {activeResult?.batch && (
-                    <Link to={`/stations/${stationId}/probe/${activeResult.batch.id}`} className="btn-primary">查看完整详情</Link>
+                    <Link to={`/stations/${stationId}/probe/${activeResult.batch.id}`} className="button-primary">查看完整详情</Link>
                   )}
                 </div>
               </div>
@@ -488,7 +488,7 @@ export default function StationDetailPage() {
               <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
                 <div>
                   <div className="eyebrow">History</div>
-                  <h2 className="mt-1 text-[13px] font-bold text-[var(--ink)]">探测详情</h2>
+                  <h2 className="mt-1 section-title">探测详情</h2>
                 </div>
                 <span className="font-mono text-[11px] text-[var(--ink-faint)]">{loadingResults ? 'updating' : `${history.length} batches`}</span>
               </div>
@@ -504,7 +504,7 @@ export default function StationDetailPage() {
                         {batch.available_models}/{batch.total_models} 可用
                         <span className="mt-1 block font-mono text-[11px] text-[var(--ink-faint)]">{batch.duration_ms}ms</span>
                       </span>
-                      <span className="btn-ghost min-h-0 px-3 py-1 text-xs">详情</span>
+                      <span className="button-ghost min-h-0 px-3 py-1">详情</span>
                     </Link>
                   ))}
                 </div>
@@ -518,7 +518,7 @@ export default function StationDetailPage() {
             {latestModels.length > 0 ? (
               <section className="panel overflow-x-auto">
                 <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
-                  <h2 className="text-[13px] font-bold text-[var(--ink)]">模型结果</h2>
+                  <h2 className="section-title">模型结果</h2>
                   <span className="font-mono text-[11px] text-[var(--ink-faint)]">{latestModels.length} models</span>
                 </div>
                 <table className="w-full min-w-[820px] text-left">
@@ -588,7 +588,7 @@ export default function StationDetailPage() {
                   type="button"
                   onClick={handleProbe}
                   disabled={isBusy || loadingModels || (hasModelCatalog && selectedCount === 0)}
-                  className="btn-primary mt-5"
+                  className="button-primary mt-5"
                 >
                   {probeButtonText}
                 </button>

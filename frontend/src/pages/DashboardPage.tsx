@@ -158,16 +158,16 @@ export default function DashboardPage() {
   return (
     <div className="page-shell">
       <div className="page-inner">
-        <section className="home-hero mb-6">
-          <div className="home-hero-main">
+        <section className="home-command mb-5">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className={`status-dot ${health.config.dot}`} />
               <span className="eyebrow">Available Routes</span>
             </div>
-            <h1 className="mt-5 max-w-3xl text-[36px] font-black leading-tight text-[var(--ink)] tracking-tight">
+            <h1 className="mt-5 max-w-3xl text-[36px] font-black leading-tight text-[var(--ink)]">
               可用模型及渠道
             </h1>
-            <p className="mt-3 max-w-2xl text-[14px] leading-7 text-[var(--ink-dim)]">
+            <p className="mt-4 max-w-2xl text-[14px] leading-7 text-[var(--ink-dim)]">
               基于每个站点最新一次探测结果，直接展示哪个模型可用、来自哪个渠道、响应速度如何。
             </p>
           </div>
@@ -188,12 +188,12 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="status-bar mb-5">
+        <section className="compact-status mb-5">
           <span className={`status-pill ${health.config.badge}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${health.config.dot}`} />
             {health.label}
           </span>
-          <span className="text-xs text-[var(--ink-faint)]">
+          <span className="text-[12px] text-[var(--ink-faint)]">
             {loadingResults ? '模型可用率更新中...' : `模型可用率 ${availableModels}/${totalModels || 0}`}
           </span>
           {(['ok', 'degraded', 'down', 'unknown'] as StationSummary['status'][]).map((status) => {
@@ -205,15 +205,15 @@ export default function DashboardPage() {
               </span>
             );
           })}
-          <button type="button" onClick={() => fetchData()} disabled={refreshingResults} className="btn-ghost ml-auto">
+          <button type="button" onClick={() => fetchData()} disabled={refreshingResults} className="button-ghost ml-auto">
             {refreshingResults ? '刷新中' : '刷新'}
           </button>
-          <Link to="/manage" className="btn-ghost">管理站点</Link>
+          <Link to="/manage" className="button-ghost">管理站点</Link>
         </section>
 
-        <div className="home-layout">
-          <section className="panel overflow-hidden">
-            <div className="section-head">
+        <div className="home-route-layout">
+          <section className="panel route-board overflow-hidden">
+            <div className="route-board-head">
               <div>
                 <div className="eyebrow">Matrix</div>
                 <h2 className="mt-1 text-[18px] font-black text-[var(--ink)]">模型 - 渠道矩阵</h2>
@@ -222,40 +222,40 @@ export default function DashboardPage() {
             </div>
 
             {initialLoading ? (
-              <div className="empty-state">
+              <div className="route-empty">
                 <h3 className="text-[17px] font-bold text-[var(--ink)]">正在加载站点</h3>
                 <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--ink-faint)]">
                   正在读取最新保存的模型和渠道结果。
                 </p>
               </div>
             ) : availableModelGroups.length === 0 ? (
-              <div className="empty-state">
+              <div className="route-empty">
                 <h3 className="text-[17px] font-bold text-[var(--ink)]">{loadingResults ? '正在读取模型和渠道' : '暂无可用模型数据'}</h3>
                 <p className="mt-2 max-w-md text-[13px] leading-6 text-[var(--ink-faint)]">
                   {loadingResults ? '正在读取数据库中已有的最新结果。' : '完成一次站点探测后，这里会直接展示模型、来源渠道和 TTFT。'}
                 </p>
-                {!loadingResults && <Link to="/manage" className="btn-primary mt-5">添加或检查站点</Link>}
+                {!loadingResults && <Link to="/manage" className="button-primary mt-5">添加或检查站点</Link>}
               </div>
             ) : (
-              <div className="model-board">
+              <div className="route-model-list">
                 {availableModelGroups.map((group) => {
                   const fastest = Math.min(...group.stations.map((station) => station.ttftMs));
                   const sortedSources = [...group.stations].sort((a, b) => a.ttftMs - b.ttftMs);
 
                   return (
-                    <article key={group.modelId} className="model-row">
-                      <div className="model-head">
+                    <article key={group.modelId} className="route-model-row">
+                      <div className="route-model-main">
                         <div className="min-w-0">
                           <h3 className="truncate font-mono text-[15px] font-black text-[var(--ink)]">{group.modelId}</h3>
                           <p className="mt-1 text-[11px] text-[var(--ink-faint)]">最近探测 {timeAgo(group.latestProbeAt)}</p>
                         </div>
-                        <div className="model-meta">
+                        <div className="route-model-meta">
                           <span className="status-pill bg-[var(--ok-dim)] text-[var(--ok-light)]">{group.stations.length} 渠道</span>
                           <span className="status-pill bg-[var(--accent-dim)] text-[var(--accent-light)]">最快 {fastest}ms</span>
                         </div>
                       </div>
 
-                      <div className="channel-grid">
+                      <div className="channel-strip">
                         {sortedSources.map((station) => {
                           const config = statusConfig[station.status] ?? statusConfig.unknown;
                           return (
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                               <span className={`status-dot ${config.dot}`} />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-[12px] font-bold text-[var(--ink)]">{station.name}</span>
-                                <span className="mt-0.5 block font-mono text-[11px] text-[var(--ink-faint)]">{station.ttftMs}ms</span>
+                                <span className="mt-1 block font-mono text-[11px] text-[var(--ink-faint)]">{station.ttftMs}ms</span>
                               </span>
                             </Link>
                           );
@@ -285,7 +285,7 @@ export default function DashboardPage() {
             <section className="panel overflow-hidden">
               <div className="border-b px-5 py-4" style={{ borderColor: 'var(--line)' }}>
                 <div className="eyebrow">Stations</div>
-                <h2 className="mt-1 text-[13px] font-bold text-[var(--ink)]">渠道来源</h2>
+                <h2 className="mt-1 section-title">渠道来源</h2>
               </div>
               {sortedStations.length === 0 ? (
                 <div className="px-5 py-10 text-center text-[13px] text-[var(--ink-faint)]">还没有站点。</div>
