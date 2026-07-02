@@ -121,7 +121,8 @@ export default function StationDetailPage() {
   const filtered = searchLow ? catalog.filter(m => m.id.toLowerCase().includes(searchLow)) : catalog;
   const selCount = selected.size;
   const models = [...(active?.models ?? [])].sort((a, b) => Number(b.available) - Number(a.available) || a.model_id.localeCompare(b.model_id));
-  const probeText = probing ? '探测中...' : hasCat ? `探测 ${selCount} 个` : loadingModels ? '获取中...' : '获取模型';
+  const probeText = probing ? '探测中...' : hasCat ? `探测 ${selCount} 个` : '等待模型列表';
+  const probeDisabled = busy || loadingModels || !hasCat || selCount === 0;
   const activeLabel = view === 'deep' ? '深度检测' : '普通探测';
   const hasProbe = Boolean(result?.batch);
   const hasDeep = Boolean(deepResult?.batch);
@@ -165,7 +166,17 @@ export default function StationDetailPage() {
                   <p className="txt-bad text-[12px]">{modelErr}</p>
                 ) : filtered.length > 0 ? filtered.map(m => (
                   <label key={m.id} className="flex cursor-pointer items-center gap-3 px-1 py-1.5 text-left">
-                    <input type="checkbox" checked={selected.has(m.id)} onChange={() => { const n = new Set(selected); n.has(m.id) ? n.delete(m.id) : n.add(m.id); setSelected(n); }} className="h-3.5 w-3.5 accent-[var(--accent)]" />
+                    <input
+                      type="checkbox"
+                      checked={selected.has(m.id)}
+                      onChange={() => {
+                        const next = new Set(selected);
+                        if (next.has(m.id)) next.delete(m.id);
+                        else next.add(m.id);
+                        setSelected(next);
+                      }}
+                      className="h-3.5 w-3.5 accent-[var(--accent)]"
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-mono text-[11px] font-semibold text-[var(--ink)]">{m.id}</div>
                       {fmtPricing(m.pricing) && <div className="truncate font-mono text-[9px] txt-faint">{fmtPricing(m.pricing)}</div>}
@@ -176,7 +187,7 @@ export default function StationDetailPage() {
                 )}
               </div>
 
-              <button onClick={doProbe} disabled={busy || loadingModels || (hasCat && selCount === 0)} className="button-primary mt-3 h-9 w-full">{probeText}</button>
+              <button onClick={doProbe} disabled={probeDisabled} className="button-primary mt-3 h-9 w-full">{probeText}</button>
 
               <div className="modal-divider" />
 
@@ -236,8 +247,8 @@ export default function StationDetailPage() {
             {models.length === 0 ? (
               <section className="panel px-6 py-16 text-center">
                 <h2 className="text-[16px] font-bold text-[var(--ink)]">{loadingRes ? '读取中...' : `暂无${activeLabel}结果`}</h2>
-                <p className="mt-2 txt-faint text-[13px]">选择模型后运行探测</p>
-                <button onClick={doProbe} disabled={busy || loadingModels || (hasCat && selCount === 0)} className="button-primary mt-4">{probeText}</button>
+                <p className="mt-2 txt-faint text-[13px]">{hasCat ? '选择模型后运行探测' : '先获取模型列表后再运行探测'}</p>
+                <button onClick={doProbe} disabled={probeDisabled} className="button-primary mt-4">{probeText}</button>
               </section>
             ) : (
               <section className="panel overflow-hidden">
