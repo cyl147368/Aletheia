@@ -812,7 +812,10 @@ textarea:focus {
 }
 
 @media (max-width: 560px) {
-  .login-shell { padding: 20px; }
+  .login-shell {
+    justify-content: flex-start;
+    padding: 20px;
+  }
   .login-panel {
     width: 350px;
     max-width: 100%;
