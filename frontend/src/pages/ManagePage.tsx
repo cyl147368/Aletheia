@@ -98,6 +98,7 @@ export default function ManagePage() {
           <div>
             <div className="eyebrow">Manage</div>
             <h1 className="page-title">站点管理</h1>
+            <p className="page-subtitle">维护站点地址、密钥和定时探测策略。</p>
           </div>
           <button onClick={openAdd} className="button-primary">添加站点</button>
         </div>
@@ -108,30 +109,42 @@ export default function ManagePage() {
         </div>
 
         {activeTab === 'list' ? (
-          <section className="panel overflow-hidden">
+          <section className="panel station-table">
             {stations.length === 0 ? (
               <div className="px-5 py-16 text-center txt-faint text-[13px]">还没有添加站点</div>
-            ) : stations.map(station => (
-              <div key={station.id} className="card-row">
-                <div className="min-w-0 flex-1">
-                  <span className="text-[13px] font-bold text-[var(--ink)]">{station.name}</span>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                    <span className="max-w-[260px] truncate font-mono text-[10px] txt-faint" title={station.base_url}>{station.base_url}</span>
-                    {station.official_url && <a href={station.official_url} target="_blank" rel="noreferrer" className="text-[10px] font-semibold text-[var(--accent-light)]">官网</a>}
+            ) : (
+              <>
+                <div className="station-table-head">
+                  <span>站点</span>
+                  <span>地址</span>
+                  <span>定时</span>
+                  <span className="text-right">操作</span>
+                </div>
+                {stations.map(station => (
+                  <div key={station.id} className="station-table-row">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold text-[var(--ink)]">{station.name}</div>
+                      {station.official_url && (
+                        <a href={station.official_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-[11px] font-semibold text-[var(--accent-light)]">官网</a>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-[11px] txt-dim" title={station.base_url}>{station.base_url}</div>
+                    </div>
+                    <div>
+                      <span className={`status-pill ${station.schedule_enabled ? 'bg-ok txt-ok' : 'bg-surface-2 txt-faint'}`}>
+                        {station.schedule_enabled ? `每 ${station.schedule_interval_hours}h` : '关闭'}
+                      </span>
+                    </div>
+                    <div className="station-actions">
+                      <button onClick={() => copyKey(station)} disabled={!station.api_key} className="button-ghost">复制 Key</button>
+                      <button onClick={() => openEdit(station)} className="button-ghost">编辑</button>
+                      <button onClick={() => handleDelete(station)} className="button-danger">删除</button>
+                    </div>
                   </div>
-                </div>
-                <button onClick={() => copyKey(station)} disabled={!station.api_key} className="button-ghost min-h-0 px-2 py-1 text-[10px]">复制 Key</button>
-                <div className="text-right">
-                  <span className={`status-pill ${station.schedule_enabled ? 'bg-ok txt-ok' : 'bg-surface-2 txt-faint'}`}>
-                    {station.schedule_enabled ? `每${station.schedule_interval_hours}h` : '关闭'}
-                  </span>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => openEdit(station)} className="text-[12px] font-bold txt-dim transition hover:text-[var(--accent-light)]">编辑</button>
-                  <button onClick={() => handleDelete(station)} className="text-[12px] font-bold txt-bad transition hover:opacity-80">删除</button>
-                </div>
-              </div>
-            ))}
+                ))}
+              </>
+            )}
           </section>
         ) : (
           <section className="panel p-5">

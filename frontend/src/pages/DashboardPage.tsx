@@ -66,48 +66,105 @@ export default function DashboardPage() {
   const totalM = Object.values(results).reduce((s, r) => s + (r?.batch?.total_models ?? 0), 0);
   const availM = Object.values(results).reduce((s, r) => s + (r?.batch?.available_models ?? 0), 0);
   const sorted = [...stations].sort((a, b) => statusRank[a.status] - statusRank[b.status] || (b.last_probe_at ? +new Date(b.last_probe_at) : 0) - (a.last_probe_at ? +new Date(a.last_probe_at) : 0));
+  const counts = {
+    ok: stations.filter(s => s.status === 'ok').length,
+    degraded: stations.filter(s => s.status === 'degraded').length,
+    down: stations.filter(s => s.status === 'down').length,
+    unknown: stations.filter(s => s.status === 'unknown').length,
+  };
+  const attentionStations = sorted.filter(s => s.status !== 'ok');
 
   const hasDown = stations.some(s => s.status === 'down');
   const hasDeg = stations.some(s => s.status === 'degraded');
   const hasUnk = stations.some(s => s.status === 'unknown');
   const healthLabel = stations.length === 0 ? '未配置站点' : hasDown ? '有站点异常' : hasDeg ? '部分需关注' : hasUnk ? '部分未探测' : '全部正常';
   const healthDot = stations.length === 0 ? statusCfg.unknown : hasDown ? statusCfg.down : hasDeg ? statusCfg.degraded : hasUnk ? statusCfg.unknown : statusCfg.ok;
+  const healthText = stations.length === 0 ? '添加站点后即可开始观测模型可用性。' : hasDown || hasDeg ? '优先处理下方需要关注的站点。' : hasUnk ? '还有站点等待首次探测。' : '当前所有站点状态稳定。';
 
   return (
     <div className="page-shell">
       <div className="page-inner">
 
-        <div className="page-header">
-          <div className="flex items-center gap-3">
+        <section className="panel dashboard-hero">
+          <div className="dashboard-health">
             <span className={`status-dot ${healthDot.dot}`} />
             <div>
               <div className="eyebrow">Dashboard</div>
               <h1 className="page-title m-0">{healthLabel}</h1>
+              <p className="page-subtitle">{healthText}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="stat-block"><span className="num">{loading ? '-' : availM}</span>/{totalM || 0} 可用</span>
-            <span className="stat-block"><span className="num">{loading ? '-' : groups.length}</span> 模型</span>
-            <span className="stat-block"><span className="num">{loading ? '-' : routeCount}</span> 渠道</span>
-            <span className="stat-block"><span className="num">{loading ? '-' : stations.length}</span> 站点</span>
-          </div>
-          <div className="flex gap-2">
+          <div className="dashboard-actions">
             <button onClick={() => fetch()} disabled={refreshing} className="button-ghost">{refreshing ? '刷新中' : '刷新'}</button>
-            <Link to="/manage" className="button-ghost">管理</Link>
+            <Link to="/manage" className="button-primary">管理站点</Link>
           </div>
+        </section>
+
+        <div className="metric-grid">
+          <section className="panel metric-card">
+            <div className="metric-label">模型可用</div>
+            <div className="metric-value">{loading ? '-' : `${availM}/${totalM || 0}`}</div>
+            <div className="metric-note">最近探测汇总</div>
+          </section>
+          <section className="panel metric-card">
+            <div className="metric-label">可用模型</div>
+            <div className="metric-value">{loading ? '-' : groups.length}</div>
+            <div className="metric-note">跨站点去重</div>
+          </section>
+          <section className="panel metric-card">
+            <div className="metric-label">渠道</div>
+            <div className="metric-value">{loading ? '-' : routeCount}</div>
+            <div className="metric-note">模型与站点组合</div>
+          </section>
+          <section className="panel metric-card">
+            <div className="metric-label">站点</div>
+            <div className="metric-value">{loading ? '-' : stations.length}</div>
+            <div className="metric-note">{counts.down + counts.degraded ? `${counts.down + counts.degraded} 个需处理` : '运行状态概览'}</div>
+          </section>
         </div>
 
-        {(['ok', 'degraded', 'down', 'unknown'] as const).map(st => {
-          const n = stations.filter(s => s.status === st).length;
-          if (!n) return null;
-          return <span key={st} className={`status-pill ${statusCfg[st].badge}`}>{statusCfg[st].label} {n}</span>;
-        })}
+        <div className="status-strip">
+          {(['down', 'degraded', 'unknown', 'ok'] as const).map(st => {
+            const n = counts[st];
+            if (!n) return null;
+            return <span key={st} className={`status-pill ${statusCfg[st].badge}`}>{statusCfg[st].label} {n}</span>;
+          })}
+        </div>
+
+        {attentionStations.length > 0 && (
+          <section className="panel mb-5 overflow-hidden">
+            <div className="section-head">
+              <div>
+                <div className="section-kicker">Attention</div>
+                <h2 className="section-heading">需要关注</h2>
+              </div>
+              <span className="txt-faint text-[12px]">{attentionStations.length} 个站点</span>
+            </div>
+            <div className="attention-list">
+              {attentionStations.slice(0, 5).map(s => {
+                const cfg = statusCfg[s.status] ?? statusCfg.unknown;
+                const b = results[s.id]?.batch;
+                return (
+                  <Link key={s.id} to={`/stations/${s.id}`} className="data-row">
+                    <span className={`status-dot ${cfg.dot}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-bold text-[var(--ink)]">{s.name}</span>
+                      <span className="block truncate font-mono text-[10px] txt-faint">{s.base_url}</span>
+                    </span>
+                    <span className={`status-pill ${cfg.badge}`}>{cfg.label}</span>
+                    <span className="stat-block">{b ? `${b.available_models}/${b.total_models}` : s.last_probe_at ? timeAgo(s.last_probe_at) : '未探测'}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section className="panel overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4">
+          <div className="section-head">
             <div>
-              <div className="eyebrow">Matrix</div>
-              <h2 className="mt-1 text-[16px] font-bold text-[var(--ink)]">可用模型</h2>
+              <div className="section-kicker">Matrix</div>
+              <h2 className="section-heading">可用模型</h2>
             </div>
             <span className="txt-faint text-[12px]">{groups.length} 个模型 · {routeCount} 条渠道</span>
           </div>
@@ -158,10 +215,10 @@ export default function DashboardPage() {
         </section>
 
         <section className="panel mt-5 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4">
+          <div className="section-head">
             <div>
-              <div className="eyebrow">Stations</div>
-              <h2 className="mt-1 text-[16px] font-bold text-[var(--ink)]">站点列表</h2>
+              <div className="section-kicker">Stations</div>
+              <h2 className="section-heading">站点列表</h2>
             </div>
             <Link to="/manage" className="button-ghost">管理</Link>
           </div>
