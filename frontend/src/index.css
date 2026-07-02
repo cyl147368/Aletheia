@@ -813,7 +813,11 @@ textarea:focus {
 
 @media (max-width: 560px) {
   .login-shell { padding: 20px; }
-  .login-panel { padding: 22px; }
+  .login-panel {
+    width: 350px;
+    max-width: 100%;
+    padding: 22px;
+  }
   .metric-grid { grid-template-columns: 1fr; }
   .model-channels { grid-template-columns: 1fr; }
 }
